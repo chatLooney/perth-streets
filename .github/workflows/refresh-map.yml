@@ -1,0 +1,27 @@
+name: Refresh Perth CBD OSM map
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/refresh-map.yml'
+  schedule:
+    - cron: '25 3 * * 1'
+permissions:
+  contents: write
+jobs:
+  build-map:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch real Perth geometry
+        run: python scripts/fetch_map.py
+      - name: Commit map
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/perth-cbd.json
+          git diff --cached --quiet || (git commit -m "Update Perth CBD OSM snapshot" && git push)
