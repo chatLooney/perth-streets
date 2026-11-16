@@ -1,4 +1,4 @@
-# Perth Streets — original browser-game prototype v0.9
+# Perth Streets — original browser-game prototype v0.10
 
 A desktop-browser 3D exploration prototype based on real OpenStreetMap road and building geometry for Perth CBD and Northbridge. This is an original implementation, not Brisbane Streets source code.
 
@@ -17,6 +17,13 @@ To run locally, run `python -m http.server 8000` from the repository directory, 
 - Mouse wheel: zoom
 - R: reset
 - M: minimap
+
+## v0.10 — full landmark search
+
+- Removed the first-120 alphabetical selection limit that hid buildings after M.
+- Added a live-search input to find any named building present in the current OpenStreetMap snapshot.
+- The dropdown filters matching names while retaining stable item IDs for Visit Building.
+- Names that do not exist in the current map snapshot cannot be found until that snapshot/coverage is expanded.
 
 ## v0.9 — first distinctive heritage landmark
 
