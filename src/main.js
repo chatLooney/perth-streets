@@ -62,10 +62,69 @@ async function loadOSM(){
  const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter'];let data;for(const endpoint of endpoints){try{status.textContent='Loading real Perth buildings and roads (trying '+new URL(endpoint).hostname+')…';const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30000);const response=await fetch(endpoint,{method:'POST',body:'data='+encodeURIComponent(query),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:controller.signal});clearTimeout(timer);if(!response.ok)throw Error(response.status);data=await response.json();if(data.elements?.length)break}catch(e){console.warn('Map service:',e)}}if(!data?.elements?.length){status.innerHTML='Real Perth map unavailable. <b>No synthetic replacement loaded.</b> Please retry after the map snapshot workflow completes.';return}
  renderOSM(data)}
 function renderOSM(data){let roadCount=0,buildingCount=0;for(const item of data.elements){if(!item.geometry?.length)continue;const pts=item.geometry.map(g=>xy(g.lat,g.lon)),tags=item.tags||{};if(tags.highway){if(['footway','path','steps','pedestrian','cycleway','service'].includes(tags.highway))continue;let width=tags.highway==='motorway'?22:tags.highway==='primary'?18:tags.highway==='secondary'?15:tags.highway==='tertiary'?13:10;roads.push(pts);roadDecorations(pts,width,tags.highway);roadCount++}else if(tags.building){let h=parseFloat(tags.height)||parseFloat(tags['building:levels'])*3.2||12+Math.random()*13;h=Math.max(3,Math.min(h,240));createBuilding(pts,h);buildingCount++}else if(tags.natural==='water'||tags.landuse==='grass'){if(pts.length>=3){const s=new THREE.Shape();s.moveTo(pts[0].x,-pts[0].y);for(let i=1;i<pts.length;i++)s.lineTo(pts[i].x,-pts[i].y);const g=new THREE.ShapeGeometry(s);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,tags.natural==='water'?waterMat:parkMat);m.position.y=0.15;scene.add(m)}}}
- positionAtStreet();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>Real OSM geometry; heights approximate where not mapped.`;worldLoaded=true}
+ positionAtStreet();addStreetFurniture();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>Real OSM geometry; heights approximate where not mapped.`;worldLoaded=true}
+// Lightweight procedural street furniture, deliberately capped for desktop performance.
+function addStreetFurniture(){
+ const poleGeometry=new THREE.CylinderGeometry(.075,.11,6.7,6);
+ const poleMaterial=new THREE.MeshStandardMaterial({color:0x626d73,metalness:0.55,roughness:0.5});
+ const lampGeometry=new THREE.BoxGeometry(1.25,.24,.4);
+ const lampMaterial=new THREE.MeshStandardMaterial({color:0xf3e3b5,emissive:0x4d4325,emissiveIntensity:.35});
+ const trunkGeometry=new THREE.CylinderGeometry(.15,.22,3.2,6);
+ const trunkMaterial=new THREE.MeshStandardMaterial({color:0x705a43});
+ const leavesGeometry=new THREE.ConeGeometry(2.4,6.2,7);
+ const leavesMaterial=new THREE.MeshStandardMaterial({color:0x3f7355,roughness:1});
+ const poles=[],lamps=[],trunks=[],crowns=[];
+ for(const points of roads){
+  for(let i=1;i<points.length;i++){
+   const a=points[i-1],b=points[i],len=a.distanceTo(b);
+   if(len<22)continue;
+   const dx=(b.x-a.x)/len,dz=(b.y-a.y)/len;
+   const perpX=-dz,perpZ=dx;
+   for(let distanceAlong=18;distanceAlong<len-10;distanceAlong+=75){
+    for(const side of [-1,1]){
+     const x=a.x+dx*distanceAlong+perpX*side*9;
+     const z=a.y+dz*distanceAlong+perpZ*side*9;
+     if(blocked(x,z,1.5)||Math.abs(x)>600||Math.abs(z)>750)continue;
+     if(poles.length<180){poles.push([x,z]);lamps.push([x+perpX*side*.5,z+perpZ*side*.5])}
+     if((Math.floor(distanceAlong/75)%2===0)&&trunks.length<150){
+      const treeX=x+perpX*side*4,treeZ=z+perpZ*side*4;
+      if(!blocked(treeX,treeZ,2.8)){trunks.push([treeX,treeZ]);crowns.push([treeX,treeZ])}
+     }
+    }
+   }
+  }
+ }
+ function instance(geometry,material,positions,y){
+  const mesh=new THREE.InstancedMesh(geometry,material,positions.length);
+  const dummy=new THREE.Object3D();
+  positions.forEach(([x,z],i)=>{dummy.position.set(x,y,z);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix)});
+  mesh.instanceMatrix.needsUpdate=true;
+  scene.add(mesh);
+ }
+ instance(poleGeometry,poleMaterial,poles,3.35);
+ instance(lampGeometry,lampMaterial,lamps,6.5);
+ instance(trunkGeometry,trunkMaterial,trunks,1.6);
+ instance(leavesGeometry,leavesMaterial,crowns,6.2);
+}
+
 // Original low-poly character and vehicle models.
 const player=new THREE.Group();const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.42,1.1,4,8),new THREE.MeshStandardMaterial({color:0x214e80}));torso.position.y=1.25;player.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),new THREE.MeshStandardMaterial({color:0xc99474}));head.position.y=2.25;player.add(head);scene.add(player);
 const car=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(2.25,0.8,4.4),new THREE.MeshStandardMaterial({color:0xd64035,metalness:0.4,roughness:0.4}));body.position.y=0.85;body.castShadow=true;car.add(body);const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.7,2.1),new THREE.MeshStandardMaterial({color:0x344c61,metalness:0.25}));cabin.position.set(0,1.53,-0.2);car.add(cabin);for(const x of [-1.1,1.1])for(const z of [-1.45,1.45]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(0.43,0.43,0.28,12),new THREE.MeshStandardMaterial({color:0x16191c}));wheel.rotation.z=Math.PI/2;wheel.position.set(x,0.48,z);car.add(wheel)}scene.add(car);
+// Roof/windscreen details, lamps, and bumpers.
+const glassMat=new THREE.MeshStandardMaterial({color:0x263b4e,metalness:.35,roughness:.22});
+const frontGlass=new THREE.Mesh(new THREE.BoxGeometry(1.65,.38,.045),glassMat);
+frontGlass.position.set(0,1.58,-1.28);frontGlass.rotation.x=-.45;car.add(frontGlass);
+const lightWhite=new THREE.MeshStandardMaterial({color:0xfff3c6,emissive:0xffe4a1,emissiveIntensity:.6});
+const lightRed=new THREE.MeshStandardMaterial({color:0xe01e18,emissive:0x7b0906,emissiveIntensity:.65});
+for(const x of [-.78,.78])for(const z of [-2.22,2.22]){
+ const lamp=new THREE.Mesh(new THREE.BoxGeometry(.42,.22,.07),z<0?lightWhite:lightRed);
+ lamp.position.set(x,.92,z);car.add(lamp);
+}
+for(const z of [-2.24,2.24]){
+ const bumper=new THREE.Mesh(new THREE.BoxGeometry(2.3,.17,.18),new THREE.MeshStandardMaterial({color:0x22272b,metalness:.35}));
+ bumper.position.set(0,.56,z);car.add(bumper);
+}
+
 const spawn=xy(-31.9522,115.8590);player.position.set(spawn.x,0,spawn.y);car.position.set(spawn.x+9,0,spawn.y-5);let driving=false,velocity=0,heading=0,yaw=0.65,pitch=0.43,distance=15,mouseDown=false,lastX=0,lastY=0;const keys=new Set();addEventListener('keydown',e=>{keys.add(e.code);if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();if(e.repeat)return;if(e.code==='KeyE'){if(driving){driving=false;player.position.copy(car.position).add(new THREE.Vector3(3,0,0));player.visible=true;velocity=0}else if(player.position.distanceTo(car.position)<9){driving=true;player.visible=false;heading=car.rotation.y}}if(e.code==='KeyR'){driving=false;player.visible=true;player.position.set(spawn.x,0,spawn.y);car.position.set(spawn.x+9,0,spawn.y-5);if(worldLoaded)positionAtStreet();velocity=0}if(e.code==='KeyM')document.getElementById('map').hidden=!document.getElementById('map').hidden});addEventListener('keyup',e=>keys.delete(e.code));renderer.domElement.addEventListener('pointerdown',e=>{mouseDown=true;lastX=e.clientX;lastY=e.clientY});addEventListener('pointerup',()=>mouseDown=false);addEventListener('pointermove',e=>{if(!mouseDown)return;yaw-=(e.clientX-lastX)*0.006;pitch=THREE.MathUtils.clamp(pitch+(e.clientY-lastY)*0.004,0.12,1.25);lastX=e.clientX;lastY=e.clientY});addEventListener('wheel',e=>distance=THREE.MathUtils.clamp(distance+e.deltaY*.012,6,40),{passive:true});addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
 // True footprint collision rather than giant building bounding rectangles.
 function insidePolygon(x,z,poly){
