@@ -225,11 +225,67 @@ async function loadOSM(){
  const query=`[out:json][timeout:30];(way["highway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});way["building"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});way["natural"="water"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});way["landuse"="grass"](${bbox.south},${bbox.west},${bbox.north},${bbox.east}););out geom;`;
  const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter'];let data;for(const endpoint of endpoints){try{status.textContent='Loading real Perth buildings and roads (trying '+new URL(endpoint).hostname+')…';const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30000);const response=await fetch(endpoint,{method:'POST',body:'data='+encodeURIComponent(query),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:controller.signal});clearTimeout(timer);if(!response.ok)throw Error(response.status);data=await response.json();if(data.elements?.length)break}catch(e){console.warn('Map service:',e)}}if(!data?.elements?.length){status.innerHTML='Real Perth map unavailable. <b>No synthetic replacement loaded.</b> Please retry after the map snapshot workflow completes.';return}
  renderOSM(data)}
-function renderOSM(data){let roadCount=0,buildingCount=0,verifiedHeightCount=0;for(const item of data.elements){if(!item.geometry?.length)continue;const pts=item.geometry.map(g=>xy(g.lat,g.lon)),tags=item.tags||{};if(tags.highway){if(['footway','path','steps','pedestrian','cycleway','service'].includes(tags.highway))continue;let width=tags.highway==='motorway'?22:tags.highway==='primary'?18:tags.highway==='secondary'?15:tags.highway==='tertiary'?13:10;roads.push(pts);roadNames.push(tags.name||tags.ref||null);roadDecorations(pts,width,tags.highway);roadCount++}else if(tags.building){const taggedHeight=parseFloat(tags.height),levels=parseFloat(tags['building:levels']);
-let h=Number.isFinite(taggedHeight)&&taggedHeight>0?taggedHeight:Number.isFinite(levels)&&levels>0?levels*3.2:14;
-h=Math.max(3,Math.min(h,260));if((Number.isFinite(taggedHeight)&&taggedHeight>0)||(Number.isFinite(levels)&&levels>0))verifiedHeightCount++;
-createBuilding(pts,h,tags);buildingCount++}else if(tags.natural==='water'||tags.landuse==='grass'){if(pts.length>=3){const s=new THREE.Shape();s.moveTo(pts[0].x,-pts[0].y);for(let i=1;i<pts.length;i++)s.lineTo(pts[i].x,-pts[i].y);const g=new THREE.ShapeGeometry(s);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,tags.natural==='water'?waterMat:parkMat);m.position.y=0.15;scene.add(m)}}}
- finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>OSM heights/levels for <b>${verifiedHeightCount}</b> buildings; others use approximate height (14m). Roof models for <b>${roofStats.modelled}</b> buildings with roof-shape tags; others remain simplified.`;worldLoaded=true}
+function renderOSM(data){
+ let roadCount=0,buildingCount=0,verifiedHeightCount=0;
+ const outlines=[],parts=[];
+ const heightFor=tags=>{
+  const taggedHeight=parseFloat(tags.height),levels=parseFloat(tags['building:levels']);
+  const verified=(Number.isFinite(taggedHeight)&&taggedHeight>0)||(Number.isFinite(levels)&&levels>0);
+  const height=Number.isFinite(taggedHeight)&&taggedHeight>0?taggedHeight:Number.isFinite(levels)&&levels>0?levels*3.2:14;
+  return {height:THREE.MathUtils.clamp(height,3,260),verified};
+ };
+ for(const item of data.elements){
+  if(!item.geometry?.length)continue;
+  const pts=item.geometry.map(g=>xy(g.lat,g.lon)),tags=item.tags||{};
+  if(tags.highway){
+   if(['footway','path','steps','pedestrian','cycleway','service'].includes(tags.highway))continue;
+   const width=tags.highway==='motorway'?22:tags.highway==='primary'?18:tags.highway==='secondary'?15:tags.highway==='tertiary'?13:10;
+   roads.push(pts);roadNames.push(tags.name||tags.ref||null);
+   roadDecorations(pts,width,tags.highway);roadCount++;
+  }else if(tags['building:part']&&tags['building:part']!=='no'){
+   if(pts.length>=3)parts.push({pts,tags});
+  }else if(tags.building&&tags.building!=='no'){
+   if(pts.length>=3)outlines.push({pts,tags});
+  }
+ }
+ // OSM Simple 3D Buildings: a building outline provides the land footprint,
+ // while its constituent building:part polygons provide the visible 3D volumes.
+ // Avoid extruding the parent over the detailed tower/podium sections.
+ const partPoints=parts.map(p=>{
+  const outline=p.pts[0].distanceTo(p.pts.at(-1))<.1?p.pts.slice(0,-1):p.pts;
+  const centroid=outline.reduce((v,q)=>v.add(q),new THREE.Vector2()).multiplyScalar(1/outline.length);
+  return {centroid,...p};
+ });
+ let parentsWithParts=0;
+ for(const {pts,tags} of outlines){
+  const {height,verified}=heightFor(tags);if(verified)verifiedHeightCount++;
+  const hull=pts[0].distanceTo(pts.at(-1))<.1?pts.slice(0,-1):pts;
+  const hasParts=partPoints.some(p=>insidePolygon(p.centroid.x,p.centroid.y,hull));
+  if(hasParts){
+   parentsWithParts++;
+   createBuilding(pts,height,tags,0,false,true);
+   if(tags.name&&namedBuildingMarkers.length<26){
+    const centroid=hull.reduce((v,q)=>v.add(q),new THREE.Vector2()).multiplyScalar(1/hull.length);
+    makeBuildingLabel(tags.name,centroid,height);
+   }
+  }else createBuilding(pts,height,tags);
+  buildingCount++;
+ }
+ let sections=0;
+ for(const {pts,tags} of parts){
+  const {height,verified}=heightFor(tags);if(verified)verifiedHeightCount++;
+  const min=Number.isFinite(parseFloat(tags.min_height))?Math.max(0,parseFloat(tags.min_height)):
+    Number.isFinite(parseFloat(tags['building:min_level']))?Math.max(0,parseFloat(tags['building:min_level'])*3.2):0;
+  if(min>=height)continue;
+  // Parent footprints already enforce street-level collisions. Elevated pieces
+  // should not create imaginary solid walls at ground level.
+  createBuilding(pts,height,tags,min,true,min<1);
+  sections++;
+ }
+ finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();
+ status.innerHTML=`Perth CBD: <b>${roadCount} roads</b> · <b>${buildingCount} outlines</b> · <b>${sections} 3D sections</b><br>${parentsWithParts} buildings use detailed part geometry · ${verifiedHeightCount} tagged heights · ${roofStats.modelled} mapped roofs. Untagged architecture remains approximate.`;
+ worldLoaded=true;
+}
 // Lightweight procedural street furniture, deliberately capped for desktop performance.
 function addStreetFurniture(){
  const poleGeometry=new THREE.CylinderGeometry(.075,.11,6.7,6);
