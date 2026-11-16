@@ -1,4 +1,4 @@
-# Perth Streets — original browser-game prototype v0.2
+# Perth Streets — original browser-game prototype v0.3
 
 A desktop-browser 3D exploration prototype based on real OpenStreetMap road and building geometry for Perth CBD and Northbridge. This is an original implementation, not Brisbane Streets source code.
 
@@ -18,6 +18,14 @@ To run locally, run `python -m http.server 8000` from the repository directory, 
 - R: reset
 - M: minimap
 
+## v0.3 improvements
+
+- Full oriented car-footprint collision against mapped building polygons, with swept movement steps to prevent clipping through buildings.
+- Vehicle spawn checked against the whole car body.
+- More detailed low-poly car, decorative streetlights and trees.
+- Improved acceleration, braking and car-follow camera.
+- Ambient placeholder pedestrians and a simple driving checkpoint activity.
+
 ## v0.2 improvements
 
 - Pavements, dark asphalt roads and dashed lane markings drawn above ground (fixed invisible roads).
@@ -30,7 +38,7 @@ To run locally, run `python -m http.server 8000` from the repository directory, 
 - The site first loads the checked-in data/perth-cbd.json map snapshot from GitHub Pages. It tries public Overpass only if that file is unavailable. The game does not present synthetic blocks as real Perth if both fail.
 - Building heights use OSM height/levels when tagged and otherwise approximate values.
 - Movement uses simplified kinematics and AABB collisions, not production vehicle physics.
-- No NPCs, missions, multiplayer, or combat yet.
+- Pedestrians and driving checkpoints are simple prototypes; no AI dialogue, multiplayer, combat, or full missions yet.
 - Geographic data © OpenStreetMap contributors, ODbL; the webpage also displays attribution. See https://www.openstreetmap.org/copyright .
 
 ## Next steps
