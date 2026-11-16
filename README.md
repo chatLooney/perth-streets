@@ -1,4 +1,4 @@
-# Perth Streets — original browser-game prototype v0.4
+# Perth Streets — original browser-game prototype v0.5
 
 A desktop-browser 3D exploration prototype based on real OpenStreetMap road and building geometry for Perth CBD and Northbridge. This is an original implementation, not Brisbane Streets source code.
 
@@ -17,6 +17,23 @@ To run locally, run `python -m http.server 8000` from the repository directory, 
 - Mouse wheel: zoom
 - R: reset
 - M: minimap
+
+## v0.5 — improving building data fidelity
+
+- OSM-tagged building colours and materials now take precedence over decorative generic textures.
+- OSM `height` and `building:levels` are used when available; untagged building heights use a consistent, explicit 14-metre placeholder.
+- Named buildings can show OSM-derived labels.
+- The in-game HUD reports how many buildings had height/level tags.
+- **Not photorealistic:** building façades, most roof shapes and numerous heights remain approximate. Do not treat this as an accurate architectural model.
+
+### Real architectural data and licence constraints
+
+- City of Perth 3D City Model: https://www.perth.wa.gov.au/building-and-planning/planning-and-building-applications/3d-perth
+- The city's Level 1 grey 3D model is offered under an agreement for development application purposes, not automatically for redistribution in a public game: https://perth.wa.gov.au/-/media/Project/COP/COP/COP/Documents-and-Forms/Develop/Documents/Development-Applications/3D-Digital-Model.pdf
+- Landgate Perth metro LiDAR: https://catalogue.data.wa.gov.au/dataset/perth-metro-lidar-data — custom licence; do not add raw or derivative content until reuse is confirmed.
+- Commercial licensed photogrammetry may provide textured 3D tiles; an asset licence must explicitly permit public online gaming.
+
+Next: obtain explicitly redistributable height/roof/texture data and model key landmarks individually using properly licensed references.
 
 ## v0.4 improvements
 
