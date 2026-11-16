@@ -76,15 +76,15 @@ function facadeTexture(style){
 const facadeMaterials=facadePalettes.map((_,i)=>new THREE.MeshStandardMaterial({
  map:facadeTexture(i),roughness:.78,metalness:.08,side:THREE.DoubleSide
 }));
-function addWallToBatch(a,b,height,style,orientation){
+function addWallToBatch(a,b,height,style,orientation,base=0){
  const dx=b.x-a.x,dz=b.y-a.y,len=Math.hypot(dx,dz);
  if(len<.6)return;
  // Winding gives the outward normal, moving the finish slightly beyond
  // the simple extruded collision shell to avoid z-fighting.
  const sign=orientation>0?1:-1,ox=sign*dz/len*.09,oz=-sign*dx/len*.09;
  const bucket=facadeBuckets[style],index=bucket.positions.length/3;
- bucket.positions.push(a.x+ox,.12,a.y+oz,b.x+ox,.12,b.y+oz,b.x+ox,height+.12,b.y+oz,a.x+ox,height+.12,a.y+oz);
- bucket.uvs.push(0,0,len/4,0,len/4,height/3.5,0,height/3.5);
+ bucket.positions.push(a.x+ox,base+.12,a.y+oz,b.x+ox,base+.12,b.y+oz,b.x+ox,height+.12,b.y+oz,a.x+ox,height+.12,a.y+oz);
+ bucket.uvs.push(0,0,len/4,0,len/4,(height-base)/3.5,0,(height-base)/3.5);
  bucket.indices.push(index,index+1,index+2,index,index+2,index+3);
 }
 function finalizeFacades(){
@@ -177,36 +177,40 @@ function buildRoof(outline,totalHeight,tags,style){
  return false;
 }
 
-function createBuilding(points,height,tags={}){
+function registerBuildingCollision(outline){
+ const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
+ const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
+ buildings.push({minX,maxX,minZ,maxZ,outline});
+}
+function createBuilding(points,height,tags={},base=0,renderVisible=true,collision=true){
 
  if(points.length<3)return;
  const outline=points.slice();
  if(outline[0].distanceTo(outline.at(-1))<.1)outline.pop();
  if(outline.length<3)return;
+ if(!renderVisible){registerBuildingCollision(outline);return}
  const style=Math.abs(Math.floor(outline[0].x*7+outline[0].y*11))%facadePalettes.length;
  const shape=new THREE.Shape();shape.moveTo(outline[0].x,-outline[0].y);
  for(let i=1;i<outline.length;i++)shape.lineTo(outline[i].x,-outline[i].y);
  shape.closePath();
  const roofShape=(tags['roof:shape']||'').toLowerCase();const roofRise=(!roofShape||roofShape==='flat')?0:(Number.isFinite(parseFloat(tags['roof:height']))?Math.min(parseFloat(tags['roof:height']),height*.65):Math.min(3,height*.35));
  const wallHeight=(roofShape==='pyramidal'||(roofShape==='gabled'&&outline.length===4))?height-Math.max(0,roofRise):height;
- const geom=new THREE.ExtrudeGeometry(shape,{depth:wallHeight,bevelEnabled:false,curveSegments:1});
+ const geom=new THREE.ExtrudeGeometry(shape,{depth:Math.max(.5,wallHeight-base),bevelEnabled:false,curveSegments:1});
  geom.rotateX(-Math.PI/2);
  const explicitWall=wallMaterialForOSM(tags);const mesh=new THREE.Mesh(geom,explicitWall||buildingMats[style]);
- mesh.position.y=.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);
+ mesh.position.y=base+.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);
  let winding=0;
  for(let i=0;i<outline.length;i++){const a=outline[i],b=outline[(i+1)%outline.length];winding+=a.x*b.y-b.x*a.y}
  for(let i=0;i<outline.length;i++){
  const a=outline[i],b=outline[(i+1)%outline.length];
  // Generic windows remain a clearly approximate visual treatment.
  // Tagged colours are respected instead of covering them with arbitrary textures.
- if(!explicitWall)addWallToBatch(a,b,wallHeight,style,winding);
+ if(!explicitWall)addWallToBatch(a,b,wallHeight,style,winding,base);
  roofEdgeVertices.push(a.x,wallHeight+.14,a.y,b.x,wallHeight+.14,b.y);
 }
 buildRoof(outline,height,tags,style);
  if(tags.name){const centroid=new THREE.Vector2(outline.reduce((v,p)=>v+p.x,0)/outline.length,outline.reduce((v,p)=>v+p.y,0)/outline.length);makeBuildingLabel(tags.name,centroid,height)}
- const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
- const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
- buildings.push({minX,maxX,minZ,maxZ,outline});
+ if(collision)registerBuildingCollision(outline);
 }
 
 function fallback(){// Clearly synthetic fallback when live map service is unavailable.
