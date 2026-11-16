@@ -1,4 +1,4 @@
-# Perth Streets — original browser-game prototype v0.3
+# Perth Streets — original browser-game prototype v0.4
 
 A desktop-browser 3D exploration prototype based on real OpenStreetMap road and building geometry for Perth CBD and Northbridge. This is an original implementation, not Brisbane Streets source code.
 
@@ -17,6 +17,13 @@ To run locally, run `python -m http.server 8000` from the repository directory, 
 - Mouse wheel: zoom
 - R: reset
 - M: minimap
+
+## v0.4 improvements
+
+- Original procedural building façades with repeating window bays, mullions and varying materials.
+- Batched wall meshes to reduce draw calls compared with an individual mesh per window.
+- Roof-edge silhouettes for more architectural definition.
+- Footprints are real OSM outlines, but façade features and many heights remain approximations, not accurate replicas of Perth buildings.
 
 ## v0.3 improvements
 
