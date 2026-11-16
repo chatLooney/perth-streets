@@ -127,6 +127,56 @@ function makeBuildingLabel(name,point,height){
  sprite.scale.set(25,4.7,1);sprite.position.set(point.x,Math.min(height+9,115),point.y);scene.add(sprite);
  namedBuildingMarkers.push(sprite);
 }
+
+// Roof geometry is only applied when the source explicitly contains roof:shape.
+// Unsupported shapes retain the mapped footprint with a flat placeholder roof.
+const roofStats={tagged:0,modelled:0};
+const roofMaterials=new Map();
+function roofMaterial(tags,style){
+ const color=osmColor(tags['roof:colour']||tags['roof:color']||tags['roof:material']);
+ if(!color)return buildingMats[style];
+ if(!roofMaterials.has(color))roofMaterials.set(color,new THREE.MeshStandardMaterial({color,roughness:.82,side:THREE.DoubleSide}));
+ return roofMaterials.get(color);
+}
+function buildRoof(outline,totalHeight,tags,style){
+ const shape=(tags['roof:shape']||'').toLowerCase();
+ if(!shape||shape==='flat')return false;
+ roofStats.tagged++;
+ const rawHeight=parseFloat(tags['roof:height']);
+ const roofHeight=Number.isFinite(rawHeight)&&rawHeight>0?Math.min(rawHeight,totalHeight*.65):Math.min(3,totalHeight*.35);
+ if(roofHeight<.5)return false;
+ const eave=totalHeight-roofHeight;
+ if(shape==='pyramidal'){
+  const center=outline.reduce((p,v)=>p.add(v),new THREE.Vector2()).multiplyScalar(1/outline.length);
+  const coords=[];
+  for(let i=0;i<outline.length;i++){
+   const a=outline[i],b=outline[(i+1)%outline.length];
+   coords.push(a.x,eave+.12,a.y,b.x,eave+.12,b.y,center.x,totalHeight+.12,center.y);
+  }
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+  geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,roofMaterial(tags,style));mesh.receiveShadow=true;scene.add(mesh);
+  roofStats.modelled++;return true;
+ }
+ if(shape==='gabled' && outline.length===4){
+  // Approximate gable aligned to the longer pair of mapped rectangle edges.
+  const a=outline[0],b=outline[1],c=outline[2],d=outline[3];
+  const ab=a.distanceTo(b),bc=b.distanceTo(c);
+  const first=ab>=bc?[a,b,c,d]:[b,c,d,a];
+  const [p0,p1,p2,p3]=first;
+  const midA=new THREE.Vector2().addVectors(p0,p3).multiplyScalar(.5);
+  const midB=new THREE.Vector2().addVectors(p1,p2).multiplyScalar(.5);
+  const v=(points)=>points.flatMap(p=>[p.x,p.h,p.y]);
+  const a0={x:p0.x,y:p0.y,h:eave+.12},a1={x:p1.x,y:p1.y,h:eave+.12};
+  const a2={x:p2.x,y:p2.y,h:eave+.12},a3={x:p3.x,y:p3.y,h:eave+.12};
+  const ra={x:midA.x,y:midA.y,h:totalHeight+.12},rb={x:midB.x,y:midB.y,h:totalHeight+.12};
+  const coords=v([a0,a1,rb,a0,rb,ra,a3,ra,rb,a3,rb,a2]);
+  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(coords,3));
+  geo.computeVertexNormals();const roof=new THREE.Mesh(geo,roofMaterial(tags,style));roof.receiveShadow=true;scene.add(roof);
+  roofStats.modelled++;return true;
+ }
+ return false;
+}
+
 function createBuilding(points,height,tags={}){
 
  if(points.length<3)return;
@@ -137,7 +187,9 @@ function createBuilding(points,height,tags={}){
  const shape=new THREE.Shape();shape.moveTo(outline[0].x,-outline[0].y);
  for(let i=1;i<outline.length;i++)shape.lineTo(outline[i].x,-outline[i].y);
  shape.closePath();
- const geom=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:1});
+ const roofShape=(tags['roof:shape']||'').toLowerCase();const roofRise=(!roofShape||roofShape==='flat')?0:(Number.isFinite(parseFloat(tags['roof:height']))?Math.min(parseFloat(tags['roof:height']),height*.65):Math.min(3,height*.35));
+ const wallHeight=(roofShape==='pyramidal'||(roofShape==='gabled'&&outline.length===4))?height-Math.max(0,roofRise):height;
+ const geom=new THREE.ExtrudeGeometry(shape,{depth:wallHeight,bevelEnabled:false,curveSegments:1});
  geom.rotateX(-Math.PI/2);
  const explicitWall=wallMaterialForOSM(tags);const mesh=new THREE.Mesh(geom,explicitWall||buildingMats[style]);
  mesh.position.y=.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);
@@ -147,10 +199,11 @@ function createBuilding(points,height,tags={}){
  const a=outline[i],b=outline[(i+1)%outline.length];
  // Generic windows remain a clearly approximate visual treatment.
  // Tagged colours are respected instead of covering them with arbitrary textures.
- if(!explicitWall)addWallToBatch(a,b,height,style,winding);
- roofEdgeVertices.push(a.x,height+.14,a.y,b.x,height+.14,b.y);
+ if(!explicitWall)addWallToBatch(a,b,wallHeight,style,winding);
+ roofEdgeVertices.push(a.x,wallHeight+.14,a.y,b.x,wallHeight+.14,b.y);
 }
-if(tags.name){const centroid=new THREE.Vector2(outline.reduce((v,p)=>v+p.x,0)/outline.length,outline.reduce((v,p)=>v+p.y,0)/outline.length);makeBuildingLabel(tags.name,centroid,height)}
+buildRoof(outline,height,tags,style);
+ if(tags.name){const centroid=new THREE.Vector2(outline.reduce((v,p)=>v+p.x,0)/outline.length,outline.reduce((v,p)=>v+p.y,0)/outline.length);makeBuildingLabel(tags.name,centroid,height)}
  const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
  const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
  buildings.push({minX,maxX,minZ,maxZ,outline});
@@ -172,7 +225,7 @@ function renderOSM(data){let roadCount=0,buildingCount=0,verifiedHeightCount=0;f
 let h=Number.isFinite(taggedHeight)&&taggedHeight>0?taggedHeight:Number.isFinite(levels)&&levels>0?levels*3.2:14;
 h=Math.max(3,Math.min(h,260));if((Number.isFinite(taggedHeight)&&taggedHeight>0)||(Number.isFinite(levels)&&levels>0))verifiedHeightCount++;
 createBuilding(pts,h,tags);buildingCount++}else if(tags.natural==='water'||tags.landuse==='grass'){if(pts.length>=3){const s=new THREE.Shape();s.moveTo(pts[0].x,-pts[0].y);for(let i=1;i<pts.length;i++)s.lineTo(pts[i].x,-pts[i].y);const g=new THREE.ShapeGeometry(s);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,tags.natural==='water'?waterMat:parkMat);m.position.y=0.15;scene.add(m)}}}
- finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>OSM heights/levels for <b>${verifiedHeightCount}</b> buildings; others use approximate height (14m). Labels are OSM names, not verified 3D architecture.`;worldLoaded=true}
+ finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>OSM heights/levels for <b>${verifiedHeightCount}</b> buildings; others use approximate height (14m). Roof models for <b>${roofStats.modelled}</b> buildings with roof-shape tags; others remain simplified.`;worldLoaded=true}
 // Lightweight procedural street furniture, deliberately capped for desktop performance.
 function addStreetFurniture(){
  const poleGeometry=new THREE.CylinderGeometry(.075,.11,6.7,6);
