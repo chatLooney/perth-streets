@@ -1,0 +1,38 @@
+name: Validate Perth Streets
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'index.html'
+      - '.github/workflows/validate.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check browser JavaScript syntax
+        run: node --check src/main.js
+      - name: Check required game files
+        run: |
+          test -s index.html
+          test -s src/main.js
+          test -s data/perth-cbd.json
+      - name: Verify OSM data format
+        run: |
+          python - <<'PY'
+          import json
+          with open('data/perth-cbd.json',encoding='utf-8') as f:
+              data=json.load(f)
+          features=data.get('elements', [])
+          assert len(features)>=100, f'Missing real map geometry: {len(features)}'
+          assert any('highway' in x.get('tags',{}) for x in features)
+          assert any('building' in x.get('tags',{}) for x in features)
+          print(f'Validated {len(features)} real OSM features')
+          PY
