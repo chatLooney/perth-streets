@@ -223,6 +223,79 @@ function buildRoof(outline,totalHeight,tags,style){
  return false;
 }
 
+
+// Original stylised Perth Town Hall, guided by City of Perth heritage descriptions.
+// This is NOT a surveyed mesh. Hall footprint follows OSM; tower dimensions are estimated.
+const townHallGeo=xy(-31.955,115.860556);
+let townHallBuilt=false;
+function addTownHallDetail(outline){
+ const west=Math.min(...outline.map(p=>p.x)),east=Math.max(...outline.map(p=>p.x));
+ const north=Math.min(...outline.map(p=>p.y)),south=Math.max(...outline.map(p=>p.y));
+ const x=west+Math.min(6,(east-west)*.23),z=north+Math.min(6,(south-north)*.23);
+ const brick=new THREE.MeshStandardMaterial({color:0x914931,roughness:.95});
+ const sandstone=new THREE.MeshStandardMaterial({color:0xe0ceb1,roughness:.85});
+ const slate=new THREE.MeshStandardMaterial({color:0x454954,roughness:1});
+ const dark=new THREE.MeshStandardMaterial({color:0x25303a,roughness:.7});
+ const group=new THREE.Group();group.position.set(x,0,z);scene.add(group);
+ const addBox=(w,h,d,cx,cy,cz,mat)=>{
+  const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  obj.position.set(cx,cy,cz);obj.castShadow=true;obj.receiveShadow=true;group.add(obj);return obj;
+ };
+ addBox(8.2,31,8.2,0,15.5,0,brick);
+ for(const y of [4.2,12.5,20.5,28]){
+  addBox(8.9,.48,8.9,0,y,0,sandstone);
+ }
+ for(const side of [-1,1]){
+  // Tall arcade-like openings, repeated along the clock tower.
+  for(const y of [11,15,23]){
+   addBox(1.15,2.7,.09,side*2, y, -4.16,dark);
+   addBox(1.35,.26,.13,side*2,y+1.48,-4.22,sandstone);
+   addBox(.09,2.75,.15,side*2-.71,y,-4.22,sandstone);
+   addBox(.09,2.75,.15,side*2+.71,y,-4.22,sandstone);
+  }
+ }
+ // Clock faces: hand-drawn canvas texture, no external image licensing.
+ const clockCanvas=document.createElement('canvas');clockCanvas.width=256;clockCanvas.height=256;
+ const c=clockCanvas.getContext('2d');
+ c.fillStyle='#e5d4ac';c.beginPath();c.arc(128,128,116,0,Math.PI*2);c.fill();
+ c.strokeStyle='#303e43';c.lineWidth=12;c.stroke();
+ c.strokeStyle='#334149';c.lineWidth=4;
+ for(let i=0;i<12;i++){
+  const a=i*Math.PI/6-Math.PI/2;
+  c.beginPath();c.moveTo(128+Math.cos(a)*84,128+Math.sin(a)*84);c.lineTo(128+Math.cos(a)*99,128+Math.sin(a)*99);c.stroke();
+ }
+ c.lineCap='round';c.lineWidth=7;c.beginPath();c.moveTo(128,128);c.lineTo(128,66);c.stroke();
+ c.lineWidth=5;c.beginPath();c.moveTo(128,128);c.lineTo(181,143);c.stroke();
+ c.fillStyle='#303e43';c.beginPath();c.arc(128,128,7,0,Math.PI*2);c.fill();
+ const clockTexture=new THREE.CanvasTexture(clockCanvas);clockTexture.colorSpace=THREE.SRGBColorSpace;
+ const clockMat=new THREE.MeshBasicMaterial({map:clockTexture,side:THREE.DoubleSide});
+ const clockFace=new THREE.PlaneGeometry(4.9,4.9);
+ for(const rotation of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
+  const m=new THREE.Mesh(clockFace,clockMat);m.rotation.y=rotation;
+  m.position.set(Math.sin(rotation)*4.15,33,Math.cos(rotation)*4.15);
+  group.add(m);
+ }
+ addBox(8.8,7.5,8.8,0,33,0,brick);
+ // Clock faces intentionally in front of this brick volume.
+ for(const rotation of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
+  const m=new THREE.Mesh(clockFace,clockMat);m.rotation.y=rotation;
+  m.position.set(Math.sin(rotation)*4.47,33,Math.cos(rotation)*4.47);group.add(m);
+ }
+ const roof=new THREE.Mesh(new THREE.ConeGeometry(6.1,12.5,4),slate);
+ roof.rotation.y=Math.PI/4;roof.position.y=43;roof.castShadow=true;group.add(roof);
+ for(const dx of [-3.6,3.6])for(const dz of [-3.6,3.6]){
+  const turret=new THREE.Mesh(new THREE.CylinderGeometry(.65,.75,8,8),brick);
+  turret.position.set(dx,40,dz);group.add(turret);
+  const cap=new THREE.Mesh(new THREE.ConeGeometry(1.1,3.5,8),slate);
+  cap.position.set(dx,45.6,dz);group.add(cap);
+ }
+ const sign=document.createElement('div');
+ sign.textContent='Perth Town Hall · stylised landmark model';
+ sign.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font:12px system-ui;color:#dce5eb;background:#122532a8;padding:5px 10px;border-radius:7px;pointer-events:none';
+ document.body.append(sign);
+ townHallBuilt=true;
+}
+
 function registerBuildingCollision(outline){
  const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
  const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
@@ -303,11 +376,27 @@ function renderOSM(data){
   return {centroid,...p};
  });
  let parentsWithParts=0;
- for(const {pts,tags} of outlines){
+ // Prefer an explicit OSM name, otherwise a footprint containing the mapped
+ // point at the Hay/Barrack Street corner. Never move the landmark to a guessed site.
+ const townHallMatch=outlines.find(({tags})=>/perth town hall/i.test(tags.name||''))||
+  outlines.find(({pts})=>{
+   const poly=pts[0].distanceTo(pts.at(-1))<.1?pts.slice(0,-1):pts;
+   return insidePolygon(townHallGeo.x,townHallGeo.y,poly);
+  });
+ for(const entry of outlines){
+ const {pts,tags}=entry;
+ const isTownHall=entry===townHallMatch;
+
   const {height,verified}=heightFor(tags);if(verified)verifiedHeightCount++;
   const hull=pts[0].distanceTo(pts.at(-1))<.1?pts.slice(0,-1):pts;
   const hasParts=partPoints.some(p=>insidePolygon(p.centroid.x,p.centroid.y,hull));
-  if(hasParts){
+  if(isTownHall){
+   // Preserve the mapped foundation, then replace generic colouring with
+   // a simplified red-brick/gabled landmark and distinctive clock tower.
+   const townTags={...tags,'building:colour':'#914931','roof:shape':'gabled','roof:height':'4'};
+   createBuilding(pts,18,townTags);
+   addTownHallDetail(hull);
+  }else if(hasParts){
    parentsWithParts++;
    createBuilding(pts,height,tags,0,false,true);
    if(tags.name){
@@ -330,7 +419,7 @@ function renderOSM(data){
   sections++;
  }
  finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();setupLandmarkExplorer();
- status.innerHTML=`Perth CBD: <b>${roadCount} roads</b> · <b>${buildingCount} outlines</b> · <b>${sections} 3D sections</b><br>${parentsWithParts} buildings use detailed part geometry · ${verifiedHeightCount} tagged heights · ${roofStats.modelled} mapped roofs. Untagged architecture remains approximate.`;
+ status.innerHTML=`Perth CBD: <b>${roadCount} roads</b> · <b>${buildingCount} outlines</b> · <b>${sections} 3D sections</b><br>${parentsWithParts} buildings use detailed part geometry · ${verifiedHeightCount} tagged heights · ${roofStats.modelled} mapped roofs. Town Hall stylised model: ${townHallBuilt?'enabled':'OSM footprint not found'}; other untagged architecture remains approximate.`;
  worldLoaded=true;
 }
 // Lightweight procedural street furniture, deliberately capped for desktop performance.
