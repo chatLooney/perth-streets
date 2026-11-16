@@ -104,12 +104,17 @@ const discoveredLandmarks=[];
 const landmarkPanel=document.createElement('section');
 landmarkPanel.style.cssText='position:absolute;top:125px;right:18px;background:#101c29e8;border:1px solid #9bc8e866;border-radius:10px;padding:12px;width:245px;color:#fff;font:13px system-ui;z-index:2';
 const landmarkTitle=document.createElement('div');landmarkTitle.textContent='PERTH BUILDING EXPLORER';landmarkTitle.style.cssText='font-weight:800;font-size:12px;letter-spacing:1px;margin-bottom:8px';
+const landmarkSearch=document.createElement('input');
+landmarkSearch.type='search';
+landmarkSearch.placeholder='Search all Perth buildings…';
+landmarkSearch.setAttribute('aria-label','Search mapped Perth buildings');
+landmarkSearch.style.cssText='display:block;width:100%;box-sizing:border-box;margin-bottom:8px;padding:9px;background:#1b3040;color:#fff;border:1px solid #6e95ae;border-radius:5px;font:13px system-ui';
 const landmarkSelect=document.createElement('select');landmarkSelect.style.cssText='width:100%;padding:8px;background:#1b3040;color:#fff;border:1px solid #6e95ae;border-radius:5px';
 landmarkSelect.setAttribute('aria-label','Choose a named Perth building');
 const introOption=document.createElement('option');introOption.value='';introOption.textContent='Choose mapped landmark…';landmarkSelect.append(introOption);
 const landmarkButton=document.createElement('button');landmarkButton.textContent='VISIT BUILDING';landmarkButton.style.cssText='margin-top:8px;width:100%;padding:9px;font-size:12px;border-radius:5px;cursor:pointer';
 const landmarkStatus=document.createElement('div');landmarkStatus.style.cssText='margin-top:6px;color:#b2c8d8;font-size:11px';landmarkStatus.textContent='Only buildings named in OpenStreetMap';
-landmarkPanel.append(landmarkTitle,landmarkSelect,landmarkButton,landmarkStatus);document.body.append(landmarkPanel);
+landmarkPanel.append(landmarkTitle,landmarkSearch,landmarkSelect,landmarkButton,landmarkStatus);document.body.append(landmarkPanel);
 function registerLandmark(tags,outline,height){
  const name=(tags.name||'').trim();if(!name||name.length>70||discoveredLandmarks.some(b=>b.name===name))return;
  const point=new THREE.Vector2();
@@ -118,11 +123,23 @@ function registerLandmark(tags,outline,height){
  discoveredLandmarks.push({name,point,height,osmId:tags['ref']||null});
 }
 function setupLandmarkExplorer(){
- const items=discoveredLandmarks.sort((a,b)=>a.name.localeCompare(b.name)).slice(0,120);
- for(let index=0;index<items.length;index++){
-  const opt=document.createElement('option');opt.value=String(index);opt.textContent=items[index].name;landmarkSelect.append(opt);
+ const items=discoveredLandmarks.sort((a,b)=>a.name.localeCompare(b.name));
+ function filterLandmarks(){
+  const term=landmarkSearch.value.trim().toLocaleLowerCase();
+  const previous=landmarkSelect.value;
+  landmarkSelect.replaceChildren();
+  const choose=document.createElement('option');choose.value='';choose.textContent='Choose mapped landmark…';landmarkSelect.append(choose);
+  let matches=0;
+  items.forEach((item,index)=>{
+   if(!item.name.toLocaleLowerCase().includes(term))return;
+   const option=document.createElement('option');option.value=String(index);option.textContent=item.name;
+   landmarkSelect.append(option);matches++;
+  });
+  if(previous!==''&&Array.from(landmarkSelect.options).some(o=>o.value===previous))landmarkSelect.value=previous;
+  landmarkStatus.textContent=matches+' matching · '+items.length+' total named mapped buildings';
  }
- landmarkStatus.textContent=items.length+' named mapped buildings · approximate 3D appearance';
+ landmarkSearch.addEventListener('input',filterLandmarks);
+ filterLandmarks();
  landmarkButton.onclick=()=>{
   const index=Number(landmarkSelect.value);
   if(landmarkSelect.value===''||!items[index])return;
