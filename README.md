@@ -1,0 +1,36 @@
+# Perth Streets — original browser-game prototype v0.1
+
+A desktop-browser 3D exploration prototype based on real OpenStreetMap road and building geometry for Perth CBD and Northbridge. This is an original implementation, not Brisbane Streets source code.
+
+## Play
+
+When GitHub Pages is enabled for the main branch's root folder, visit https://chatlooney.github.io/perth-streets/ .
+
+To run locally, run `python -m http.server 8000` from the repository directory, then visit http://localhost:8000 in Chrome or Edge. Internet access is required for Three.js and OpenStreetMap requests.
+
+## Controls
+
+- WASD: walk / drive
+- Shift: sprint while walking
+- E: enter or exit the nearby red car
+- Mouse drag: orbit camera
+- Mouse wheel: zoom
+- R: reset
+- M: minimap
+
+## Scope and limitations
+
+- Area: approximately 31.963°S–31.940°S, 115.846°E–115.872°E.
+- Roads and building footprints download from public OpenStreetMap Overpass API endpoints at runtime. Servers may be unavailable or rate limited; the program then uses a clearly labelled *synthetic fallback grid*, not actual Perth.
+- Building heights use OSM height/levels when tagged and otherwise approximate values.
+- Movement uses simplified kinematics and AABB collisions, not production vehicle physics.
+- No NPCs, missions, multiplayer, or combat yet.
+- Geographic data © OpenStreetMap contributors, ODbL; the webpage also displays attribution. See https://www.openstreetmap.org/copyright .
+
+## Next steps
+
+1. Host processed map chunks instead of live Overpass calls.
+2. Improve polygon geometry, terrain, lane markings, crossings and sidewalks.
+3. Add proper physics, player animations and traffic.
+4. Add NPCs, missions and multiplayer.
+5. Optimize rendering using instancing and LOD.
