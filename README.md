@@ -8,6 +8,21 @@ When GitHub Pages is enabled for the main branch's root folder, visit https://ch
 
 To run locally, run `python -m http.server 8000` from the repository directory, then visit http://localhost:8000 in Chrome or Edge. Internet access is required for Three.js and OpenStreetMap requests.
 
+## Photorealistic Perth 3D evaluation (separate from the game)
+
+Visit [photorealistic.html](https://chatlooney.github.io/perth-streets/photorealistic.html) for an opt-in, view-only CesiumJS test using Google Maps Platform Photorealistic 3D Tiles.
+
+**Requirements:** a Google Cloud account with billing enabled, Map Tiles API enabled, and a browser-restricted API key authorized for `https://chatlooney.github.io/*`. Set a **low daily root-tiles quota** in Google Cloud to reduce unexpected charges. Confirm current rates at https://developers.google.com/maps/billing-and-pricing/pricing . Google currently lists 1,000 free 3D root tileset requests per month, followed by usage-based charges.
+
+- Input a restricted API key into the viewer page, not GitHub source code or a public chat.
+- The key is held in memory and provided to Google via Cesium, with no localStorage, cookies or repository storage by this project.
+- The CesiumJS loader displays required source credits on screen.
+- This is **visual research only**; Google imagery, meshes and 3D geometry are not downloaded, exported, recreated or bundled in the open-source game.
+- Whether Perth CBD has good textured 3D coverage requires a live test; coverage is **not yet confirmed**.
+- We must verify Google platform terms before any integration into live driving gameplay; do not assume photorealistic tiles are suitable for a publicly distributed game.
+
+References: https://developers.google.com/maps/documentation/tile/3d-tiles , https://developers.google.com/maps/documentation/tile/policies , https://cesium.com/learn/cesiumjs-learn/cesiumjs-photorealistic-3d-tiles/
+
 ## Controls
 
 - WASD: walk / drive
