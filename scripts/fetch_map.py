@@ -34,7 +34,7 @@ def get_tile(south, west, north, east, depth=0):
             ways = []
             for way in root.findall("way"):
                 tags = {t.get("k"): t.get("v") for t in way.findall("tag")}
-                if not ("highway" in tags or "building" in tags):
+                if not ("highway" in tags or "building" in tags or "building:part" in tags):
                     continue
                 geom = []
                 for ref in way.findall("nd"):
@@ -44,7 +44,7 @@ def get_tile(south, west, north, east, depth=0):
                 if len(geom) < 2:
                     continue
                 ways.append({"type": "way", "id": int(way.get("id")), "tags": tags, "geometry": geom})
-            print(f"OSM tile {bounds}: {len(ways)} road/building ways", flush=True)
+            print(f"OSM tile {bounds}: {len(ways)} road/building/building-part ways", flush=True)
             return ways
         except (urllib.error.URLError, TimeoutError, ET.ParseError, ValueError) as exc:
             last_error = exc
