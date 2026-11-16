@@ -139,7 +139,8 @@ function setupLandmarkExplorer(){
   }
   if(!selected){landmarkStatus.textContent='Could not find safe walking location';return}
   player.position.set(selected.x,0,selected.y);
-  car.position.set(p.x,0,p.y);car.rotation.y=candidate.angle;heading=candidate.angle;yaw=heading;
+  // Keep vehicle at its previous location rather than teleporting it into an obstructed road.
+  heading=car.rotation.y;yaw=candidate.angle;
   landmarkStatus.textContent='Viewing neighbourhood: '+target.name;
  };
 }
@@ -309,7 +310,7 @@ function renderOSM(data){
   if(hasParts){
    parentsWithParts++;
    createBuilding(pts,height,tags,0,false,true);
-   if(tags.name&&namedBuildingMarkers.length<26){
+   if(tags.name){
     registerLandmark(tags,hull,height);
     const centroid=hull.reduce((v,q)=>v.add(q),new THREE.Vector2()).multiplyScalar(1/hull.length);
     makeBuildingLabel(tags.name,centroid,height);
