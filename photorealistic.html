@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Perth Streets | Photorealistic 3D Evaluation</title>
+<link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.134/Build/Cesium/Widgets/widgets.css">
+<style>
+html,body,#view{height:100%;width:100%;margin:0;background:#091a27;color:white;font:14px system-ui;overflow:hidden}
+#panel{position:absolute;left:18px;top:18px;z-index:20;background:#0a1e2cf0;border:1px solid #57839a;padding:20px;border-radius:12px;width:min(350px,calc(100vw - 80px));box-shadow:0 12px 35px #0006}
+h1{font-size:20px;margin:0 0 5px}p{color:#b8cedb;line-height:1.5;margin:10px 0}
+label{display:block;font-weight:650;margin:12px 0 5px}input{width:100%;box-sizing:border-box;border:1px solid #6597af;background:#0f2d40;color:white;padding:12px;border-radius:7px}
+button{margin-top:10px;background:#a4dfff;color:#06202e;font-weight:800;border:0;border-radius:7px;padding:12px;width:100%;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}
+#status{font-size:12px;white-space:pre-wrap;color:#e7e3ac;margin:10px 0}
+#bottom{position:absolute;bottom:15px;left:15px;background:#0b2035df;padding:8px;border-radius:6px;z-index:15;font-size:12px;max-width:calc(100% - 30px)}
+a{color:#aaddff}#back{display:block;margin-top:9px}small{color:#b4cbd6}
+</style>
+<script src="https://cesium.com/downloads/cesiumjs/releases/1.134/Build/Cesium/Cesium.js"></script>
+</head><body><div id="view"></div>
+<div id="panel"><h1>Perth — real 3D imagery test</h1>
+<p>This is a separate <b>view-only</b> Google/Cesium experiment, not the driving game. Check Perth's 3D coverage and building textures.</p>
+<label for="key">Your Google Maps Platform API key</label>
+<input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Paste a restricted Map Tiles API key">
+<small>Key stays in this browser page's memory. It is transmitted to Google to request tiles. Never paste it into GitHub or send it in chat.</small>
+<button id="load">Load Perth photorealistic 3D</button>
+<div id="status" role="status">No API calls made yet.</div>
+<small>Google Cloud billing is required. Set a low daily quota before testing. Requests may incur costs.</small>
+<a id="back" href="./">Back to Perth Streets game</a>
+</div>
+<div id="bottom">Evaluation only · Source: Google Maps Platform 3D Tiles · Credits appear within the viewer · No downloads or extracted models</div>
+<script src="./src/photorealistic.js"></script>
+</body></html>
