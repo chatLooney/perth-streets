@@ -382,7 +382,15 @@ function renderOSM(data){
   outlines.find(({pts})=>{
    const poly=pts[0].distanceTo(pts.at(-1))<.1?pts.slice(0,-1):pts;
    return insidePolygon(townHallGeo.x,townHallGeo.y,poly);
-  });
+  })||
+  (()=>{let nearest=null,min=35*35;
+   for(const entry of outlines){
+    const poly=entry.pts,centre=poly.reduce((v,p)=>v.add(p),new THREE.Vector2()).multiplyScalar(1/poly.length);
+    const d=centre.distanceToSquared(townHallGeo);
+    if(d<min){min=d;nearest=entry}
+   }
+   return nearest;
+  })();
  for(const entry of outlines){
  const {pts,tags}=entry;
  const isTownHall=entry===townHallMatch;
@@ -393,7 +401,7 @@ function renderOSM(data){
   if(isTownHall){
    // Preserve the mapped foundation, then replace generic colouring with
    // a simplified red-brick/gabled landmark and distinctive clock tower.
-   const townTags={...tags,'building:colour':'#914931','roof:shape':'gabled','roof:height':'4'};
+   const townTags={...tags,name:'Perth Town Hall','building:colour':'#914931','roof:shape':'gabled','roof:height':'4'};
    createBuilding(pts,18,townTags);
    addTownHallDetail(hull);
   }else if(hasParts){
