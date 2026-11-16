@@ -50,6 +50,7 @@ function positionAtStreet(){
 
 
 const facadeBuckets=Array.from({length:5},()=>({positions:[],uvs:[],indices:[]}));
+const roofEdgeVertices=[];
 const facadePalettes=[
  {wall:'#aeb6b7',frame:'#d8e0df',glass:'#31536d',glassLit:'#7698ab'},
  {wall:'#b4a69a',frame:'#dfd5ca',glass:'#314353',glassLit:'#8b9caa'},
@@ -87,6 +88,7 @@ function addWallToBatch(a,b,height,style,orientation){
  bucket.indices.push(index,index+1,index+2,index,index+2,index+3);
 }
 function finalizeFacades(){
+ if(roofEdgeVertices.length){const edges=new THREE.BufferGeometry();edges.setAttribute('position',new THREE.Float32BufferAttribute(roofEdgeVertices,3));scene.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0xd6d9d5,transparent:true,opacity:.55})));}
  for(let i=0;i<facadeBuckets.length;i++){
   const batch=facadeBuckets[i];if(!batch.indices.length)continue;
   const geo=new THREE.BufferGeometry();
@@ -112,7 +114,7 @@ function createBuilding(points,height){
  mesh.position.y=.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);
  let winding=0;
  for(let i=0;i<outline.length;i++){const a=outline[i],b=outline[(i+1)%outline.length];winding+=a.x*b.y-b.x*a.y}
- for(let i=0;i<outline.length;i++)addWallToBatch(outline[i],outline[(i+1)%outline.length],height,style,winding);
+ for(let i=0;i<outline.length;i++){const a=outline[i],b=outline[(i+1)%outline.length];addWallToBatch(a,b,height,style,winding);roofEdgeVertices.push(a.x,height+.14,a.y,b.x,height+.14,b.y);}
  const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
  const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
  buildings.push({minX,maxX,minZ,maxZ,outline});
