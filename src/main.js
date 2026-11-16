@@ -48,7 +48,7 @@ function positionAtStreet(){
  yaw=heading;
 }
 
-function createBuilding(points,height){if(points.length<3)return;let outline=points.slice();if(outline[0].distanceTo(outline.at(-1))<0.1)outline.pop();if(outline.length<3)return;const shape=new THREE.Shape();shape.moveTo(outline[0].x,-outline[0].y);for(let i=1;i<outline.length;i++)shape.lineTo(outline[i].x,-outline[i].y);shape.closePath();const geom=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:1});geom.rotateX(-Math.PI/2);const mesh=new THREE.Mesh(geom,buildingMats[Math.floor(Math.random()*buildingMats.length)]);mesh.position.y=0.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x)),minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));buildings.push({minX,maxX,minZ,maxZ})}
+function createBuilding(points,height){if(points.length<3)return;let outline=points.slice();if(outline[0].distanceTo(outline.at(-1))<0.1)outline.pop();if(outline.length<3)return;const shape=new THREE.Shape();shape.moveTo(outline[0].x,-outline[0].y);for(let i=1;i<outline.length;i++)shape.lineTo(outline[i].x,-outline[i].y);shape.closePath();const geom=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:1});geom.rotateX(-Math.PI/2);const mesh=new THREE.Mesh(geom,buildingMats[Math.floor(Math.random()*buildingMats.length)]);mesh.position.y=0.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x)),minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));buildings.push({minX,maxX,minZ,maxZ,outline})}
 function fallback(){// Clearly synthetic fallback when live map service is unavailable.
  for(let x=-1050;x<=1050;x+=135){roads.push([new THREE.Vector2(x,-1200),new THREE.Vector2(x,1200)]);makeRibbon(roads.at(-1),17,roadMat)}for(let z=-1200;z<=1200;z+=130){roads.push([new THREE.Vector2(-1100,z),new THREE.Vector2(1100,z)]);makeRibbon(roads.at(-1),17,roadMat)}for(let x=-1050;x<1000;x+=135)for(let z=-1200;z<1100;z+=130){if(Math.abs(x)<160&&Math.abs(z)<170)continue;const h=14+Math.random()*70;createBuilding([new THREE.Vector2(x+24,z+24),new THREE.Vector2(x+98,z+24),new THREE.Vector2(x+98,z+88),new THREE.Vector2(x+24,z+88)],h)}status.innerHTML='Offline fallback: <b>synthetic blocks</b> (not real Perth). Reload to retry OpenStreetMap.';worldLoaded=true}
 async function loadOSM(){
@@ -67,8 +67,41 @@ function renderOSM(data){let roadCount=0,buildingCount=0;for(const item of data.
 const player=new THREE.Group();const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.42,1.1,4,8),new THREE.MeshStandardMaterial({color:0x214e80}));torso.position.y=1.25;player.add(torso);const head=new THREE.Mesh(new THREE.SphereGeometry(0.32,12,10),new THREE.MeshStandardMaterial({color:0xc99474}));head.position.y=2.25;player.add(head);scene.add(player);
 const car=new THREE.Group();const body=new THREE.Mesh(new THREE.BoxGeometry(2.25,0.8,4.4),new THREE.MeshStandardMaterial({color:0xd64035,metalness:0.4,roughness:0.4}));body.position.y=0.85;body.castShadow=true;car.add(body);const cabin=new THREE.Mesh(new THREE.BoxGeometry(1.9,0.7,2.1),new THREE.MeshStandardMaterial({color:0x344c61,metalness:0.25}));cabin.position.set(0,1.53,-0.2);car.add(cabin);for(const x of [-1.1,1.1])for(const z of [-1.45,1.45]){const wheel=new THREE.Mesh(new THREE.CylinderGeometry(0.43,0.43,0.28,12),new THREE.MeshStandardMaterial({color:0x16191c}));wheel.rotation.z=Math.PI/2;wheel.position.set(x,0.48,z);car.add(wheel)}scene.add(car);
 const spawn=xy(-31.9522,115.8590);player.position.set(spawn.x,0,spawn.y);car.position.set(spawn.x+9,0,spawn.y-5);let driving=false,velocity=0,heading=0,yaw=0.65,pitch=0.43,distance=15,mouseDown=false,lastX=0,lastY=0;const keys=new Set();addEventListener('keydown',e=>{keys.add(e.code);if(['Space','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();if(e.repeat)return;if(e.code==='KeyE'){if(driving){driving=false;player.position.copy(car.position).add(new THREE.Vector3(3,0,0));player.visible=true;velocity=0}else if(player.position.distanceTo(car.position)<9){driving=true;player.visible=false;heading=car.rotation.y}}if(e.code==='KeyR'){driving=false;player.visible=true;player.position.set(spawn.x,0,spawn.y);car.position.set(spawn.x+9,0,spawn.y-5);if(worldLoaded)positionAtStreet();velocity=0}if(e.code==='KeyM')document.getElementById('map').hidden=!document.getElementById('map').hidden});addEventListener('keyup',e=>keys.delete(e.code));renderer.domElement.addEventListener('pointerdown',e=>{mouseDown=true;lastX=e.clientX;lastY=e.clientY});addEventListener('pointerup',()=>mouseDown=false);addEventListener('pointermove',e=>{if(!mouseDown)return;yaw-=(e.clientX-lastX)*0.006;pitch=THREE.MathUtils.clamp(pitch+(e.clientY-lastY)*0.004,0.12,1.25);lastX=e.clientX;lastY=e.clientY});addEventListener('wheel',e=>distance=THREE.MathUtils.clamp(distance+e.deltaY*.012,6,40),{passive:true});addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
-function blocked(x,z){return buildings.some(b=>x>b.minX-0.7&&x<b.maxX+0.7&&z>b.minZ-0.7&&z<b.maxZ+0.7)}
+// True footprint collision rather than giant building bounding rectangles.
+function insidePolygon(x,z,poly){
+ let inside=false;
+ for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+  const a=poly[i],b=poly[j];
+  if((a.y>z)!==(b.y>z) && x<(b.x-a.x)*(z-a.y)/(b.y-a.y)+a.x)inside=!inside;
+ }
+ return inside;
+}
+function distanceToSegmentSq(x,z,a,b){
+ const dx=b.x-a.x,dz=b.y-a.y,lengthSq=dx*dx+dz*dz;
+ const t=lengthSq>0?THREE.MathUtils.clamp(((x-a.x)*dx+(z-a.y)*dz)/lengthSq,0,1):0;
+ const px=a.x+t*dx,pz=a.y+t*dz;
+ return (x-px)*(x-px)+(z-pz)*(z-pz);
+}
+function onStreet(x,z){
+ // Real OSM roads occasionally pass through building footprints due to data
+ // simplification, so the road surface takes precedence for vehicle movement.
+ for(const points of roads)for(let i=1;i<points.length;i++){
+  if(distanceToSegmentSq(x,z,points[i-1],points[i])<12*12)return true;
+ }
+ return false;
+}
+function blocked(x,z,radius=0.7,vehicle=false){
+ if(vehicle && onStreet(x,z))return false;
+ return buildings.some(b=>{
+  if(x<b.minX-radius||x>b.maxX+radius||z<b.minZ-radius||z>b.maxZ+radius)return false;
+  if(insidePolygon(x,z,b.outline))return true;
+  for(let i=0;i<b.outline.length;i++){
+   if(distanceToSegmentSq(x,z,b.outline[i],b.outline[(i+1)%b.outline.length])<radius*radius)return true;
+  }
+  return false;
+ });
+}
 const mini=document.getElementById('mini'),ctx=mini.getContext('2d');function drawMap(target){const w=420,scale=.16;ctx.fillStyle='#172633';ctx.fillRect(0,0,w,w);ctx.save();ctx.translate(w/2,w/2);ctx.rotate(-heading*(driving?1:0));ctx.translate(-target.x*scale,-target.z*scale);ctx.strokeStyle='#8296a1';ctx.lineWidth=2;for(const pts of roads){ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x*scale,p.y*scale):ctx.moveTo(p.x*scale,p.y*scale));ctx.stroke()}ctx.fillStyle='#526879';for(const b of buildings)ctx.fillRect(b.minX*scale,b.minZ*scale,(b.maxX-b.minX)*scale,(b.maxZ-b.minZ)*scale);ctx.fillStyle='#ff8b74';ctx.beginPath();ctx.arc(car.position.x*scale,car.position.z*scale,5,0,7);ctx.fill();ctx.restore();ctx.fillStyle='#8cdbff';ctx.beginPath();ctx.moveTo(w/2,w/2-10);ctx.lineTo(w/2-7,w/2+9);ctx.lineTo(w/2+7,w/2+9);ctx.fill()}
-let last=performance.now(),mapTimer=0;function tick(now){requestAnimationFrame(tick);const dt=Math.min((now-last)/1000,.05);last=now;const f=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0),turn=(keys.has('KeyA')?1:0)-(keys.has('KeyD')?1:0);if(driving){velocity+=f*dt*19;velocity*=Math.exp(-dt*(f?0.45:1.8));velocity=THREE.MathUtils.clamp(velocity,-13,34);heading+=turn*dt*(0.65+Math.min(Math.abs(velocity)/20,1))*Math.sign(velocity||1);const nx=car.position.x-Math.sin(heading)*velocity*dt,nz=car.position.z-Math.cos(heading)*velocity*dt;if(!blocked(nx,nz)){car.position.x=nx;car.position.z=nz}else velocity=0;car.rotation.y=heading;speedLabel.textContent=Math.round(Math.abs(velocity)*3.6)+' KM/H';}else{const move=new THREE.Vector3();if(f||turn){const angle=yaw;move.set(-Math.sin(angle)*f-Math.cos(angle)*turn,0,-Math.cos(angle)*f+Math.sin(angle)*turn).normalize();const rate=keys.has('ShiftLeft')?10:5;const nx=player.position.x+move.x*rate*dt,nz=player.position.z+move.z*rate*dt;if(!blocked(nx,nz)){player.position.x=nx;player.position.z=nz}player.rotation.y=Math.atan2(-move.x,-move.z)}speedLabel.textContent='ON FOOT';}
+let last=performance.now(),mapTimer=0;function tick(now){requestAnimationFrame(tick);const dt=Math.min((now-last)/1000,.05);last=now;const f=(keys.has('KeyW')||keys.has('ArrowUp')?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')?1:0),turn=(keys.has('KeyA')?1:0)-(keys.has('KeyD')?1:0);if(driving){velocity+=f*dt*19;velocity*=Math.exp(-dt*(f?0.45:1.8));velocity=THREE.MathUtils.clamp(velocity,-13,34);heading+=turn*dt*(0.65+Math.min(Math.abs(velocity)/20,1))*Math.sign(velocity||1);const nx=car.position.x-Math.sin(heading)*velocity*dt,nz=car.position.z-Math.cos(heading)*velocity*dt;if(!blocked(nx,nz,1.2,true)){car.position.x=nx;car.position.z=nz}else velocity=0;car.rotation.y=heading;speedLabel.textContent=Math.round(Math.abs(velocity)*3.6)+' KM/H';}else{const move=new THREE.Vector3();if(f||turn){const angle=yaw;move.set(-Math.sin(angle)*f-Math.cos(angle)*turn,0,-Math.cos(angle)*f+Math.sin(angle)*turn).normalize();const rate=keys.has('ShiftLeft')?10:5;const nx=player.position.x+move.x*rate*dt,nz=player.position.z+move.z*rate*dt;if(!blocked(nx,nz)){player.position.x=nx;player.position.z=nz}player.rotation.y=Math.atan2(-move.x,-move.z)}speedLabel.textContent='ON FOOT';}
  const target=driving?car.position:player.position;const desired=new THREE.Vector3(target.x+Math.sin(yaw)*Math.cos(pitch)*distance,target.y+2.2+Math.sin(pitch)*distance,target.z+Math.cos(yaw)*Math.cos(pitch)*distance);camera.position.lerp(desired,Math.min(1,dt*6));camera.lookAt(target.x,target.y+1.6,target.z);if(now-mapTimer>180){drawMap(target);mapTimer=now}renderer.render(scene,camera)}requestAnimationFrame(tick);
 document.getElementById('start').onclick=()=>{document.getElementById('splash').remove();status.textContent='Downloading live Perth map from OpenStreetMap…';loadOSM().catch(e=>{console.error(e);status.textContent='Map load failed. Check connection or retry later.'})};
