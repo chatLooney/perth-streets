@@ -99,7 +99,36 @@ function finalizeFacades(){
   mesh.receiveShadow=true;scene.add(mesh);
  }
 }
-function createBuilding(points,height){
+// Map-source building tags take precedence over the approximate visual style.
+const namedBuildingMarkers=[];
+function osmColor(raw){
+ if(!raw)return null;
+ const named={brick:'#a96b50',concrete:'#aaa9a3',glass:'#4f7f90',steel:'#75858c',stone:'#b1a594',sandstone:'#c6a77b',metal:'#85949c',white:'#dedbd4',grey:'#999e9e',gray:'#999e9e',brown:'#896950',red:'#a85d4e',cream:'#d8c7a7'};
+ const v=String(raw).trim().toLowerCase();
+ if(named[v])return named[v];
+ if(/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(v))return v;
+ return null;
+}
+const customWallMaterials=new Map();
+function wallMaterialForOSM(tags){
+ const color=osmColor(tags['building:colour']||tags['building:color']||tags['building:material']);
+ if(!color)return null;
+ if(!customWallMaterials.has(color))customWallMaterials.set(color,new THREE.MeshStandardMaterial({color,roughness:.79,side:THREE.DoubleSide}));
+ return customWallMaterials.get(color);
+}
+function makeBuildingLabel(name,point,height){
+ if(namedBuildingMarkers.length>=26||!name||name.length>54)return;
+ const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;
+ const c=canvas.getContext('2d');c.fillStyle='#0b1d28db';c.fillRect(0,0,512,96);
+ c.strokeStyle='#a5dbf2';c.lineWidth=3;c.strokeRect(2,2,508,92);
+ c.font='bold 29px Arial';c.fillStyle='white';c.textAlign='center';c.fillText(name,256,59,485);
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+ const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false}));
+ sprite.scale.set(25,4.7,1);sprite.position.set(point.x,Math.min(height+9,115),point.y);scene.add(sprite);
+ namedBuildingMarkers.push(sprite);
+}
+function createBuilding(points,height,tags={}){
+
  if(points.length<3)return;
  const outline=points.slice();
  if(outline[0].distanceTo(outline.at(-1))<.1)outline.pop();
@@ -110,11 +139,18 @@ function createBuilding(points,height){
  shape.closePath();
  const geom=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:1});
  geom.rotateX(-Math.PI/2);
- const mesh=new THREE.Mesh(geom,buildingMats[style]);
+ const explicitWall=wallMaterialForOSM(tags);const mesh=new THREE.Mesh(geom,explicitWall||buildingMats[style]);
  mesh.position.y=.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);
  let winding=0;
  for(let i=0;i<outline.length;i++){const a=outline[i],b=outline[(i+1)%outline.length];winding+=a.x*b.y-b.x*a.y}
- for(let i=0;i<outline.length;i++){const a=outline[i],b=outline[(i+1)%outline.length];addWallToBatch(a,b,height,style,winding);roofEdgeVertices.push(a.x,height+.14,a.y,b.x,height+.14,b.y);}
+ for(let i=0;i<outline.length;i++){
+ const a=outline[i],b=outline[(i+1)%outline.length];
+ // Generic windows remain a clearly approximate visual treatment.
+ // Tagged colours are respected instead of covering them with arbitrary textures.
+ if(!explicitWall)addWallToBatch(a,b,height,style,winding);
+ roofEdgeVertices.push(a.x,height+.14,a.y,b.x,height+.14,b.y);
+}
+if(tags.name){const centroid=new THREE.Vector2(outline.reduce((v,p)=>v+p.x,0)/outline.length,outline.reduce((v,p)=>v+p.y,0)/outline.length);makeBuildingLabel(tags.name,centroid,height)}
  const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
  const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
  buildings.push({minX,maxX,minZ,maxZ,outline});
@@ -132,8 +168,11 @@ async function loadOSM(){
  const query=`[out:json][timeout:30];(way["highway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});way["building"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});way["natural"="water"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});way["landuse"="grass"](${bbox.south},${bbox.west},${bbox.north},${bbox.east}););out geom;`;
  const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter'];let data;for(const endpoint of endpoints){try{status.textContent='Loading real Perth buildings and roads (trying '+new URL(endpoint).hostname+')…';const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30000);const response=await fetch(endpoint,{method:'POST',body:'data='+encodeURIComponent(query),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:controller.signal});clearTimeout(timer);if(!response.ok)throw Error(response.status);data=await response.json();if(data.elements?.length)break}catch(e){console.warn('Map service:',e)}}if(!data?.elements?.length){status.innerHTML='Real Perth map unavailable. <b>No synthetic replacement loaded.</b> Please retry after the map snapshot workflow completes.';return}
  renderOSM(data)}
-function renderOSM(data){let roadCount=0,buildingCount=0;for(const item of data.elements){if(!item.geometry?.length)continue;const pts=item.geometry.map(g=>xy(g.lat,g.lon)),tags=item.tags||{};if(tags.highway){if(['footway','path','steps','pedestrian','cycleway','service'].includes(tags.highway))continue;let width=tags.highway==='motorway'?22:tags.highway==='primary'?18:tags.highway==='secondary'?15:tags.highway==='tertiary'?13:10;roads.push(pts);roadDecorations(pts,width,tags.highway);roadCount++}else if(tags.building){let h=parseFloat(tags.height)||parseFloat(tags['building:levels'])*3.2||12+Math.random()*13;h=Math.max(3,Math.min(h,240));createBuilding(pts,h);buildingCount++}else if(tags.natural==='water'||tags.landuse==='grass'){if(pts.length>=3){const s=new THREE.Shape();s.moveTo(pts[0].x,-pts[0].y);for(let i=1;i<pts.length;i++)s.lineTo(pts[i].x,-pts[i].y);const g=new THREE.ShapeGeometry(s);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,tags.natural==='water'?waterMat:parkMat);m.position.y=0.15;scene.add(m)}}}
- finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>Real OSM geometry; heights approximate where not mapped.`;worldLoaded=true}
+function renderOSM(data){let roadCount=0,buildingCount=0,verifiedHeightCount=0;for(const item of data.elements){if(!item.geometry?.length)continue;const pts=item.geometry.map(g=>xy(g.lat,g.lon)),tags=item.tags||{};if(tags.highway){if(['footway','path','steps','pedestrian','cycleway','service'].includes(tags.highway))continue;let width=tags.highway==='motorway'?22:tags.highway==='primary'?18:tags.highway==='secondary'?15:tags.highway==='tertiary'?13:10;roads.push(pts);roadDecorations(pts,width,tags.highway);roadCount++}else if(tags.building){const taggedHeight=parseFloat(tags.height),levels=parseFloat(tags['building:levels']);
+let h=Number.isFinite(taggedHeight)&&taggedHeight>0?taggedHeight:Number.isFinite(levels)&&levels>0?levels*3.2:14;
+h=Math.max(3,Math.min(h,260));if((Number.isFinite(taggedHeight)&&taggedHeight>0)||(Number.isFinite(levels)&&levels>0))verifiedHeightCount++;
+createBuilding(pts,h,tags);buildingCount++}else if(tags.natural==='water'||tags.landuse==='grass'){if(pts.length>=3){const s=new THREE.Shape();s.moveTo(pts[0].x,-pts[0].y);for(let i=1;i<pts.length;i++)s.lineTo(pts[i].x,-pts[i].y);const g=new THREE.ShapeGeometry(s);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,tags.natural==='water'?waterMat:parkMat);m.position.y=0.15;scene.add(m)}}}
+ finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>OSM heights/levels for <b>${verifiedHeightCount}</b> buildings; others use approximate height (14m). Labels are OSM names, not verified 3D architecture.`;worldLoaded=true}
 // Lightweight procedural street furniture, deliberately capped for desktop performance.
 function addStreetFurniture(){
  const poleGeometry=new THREE.CylinderGeometry(.075,.11,6.7,6);
