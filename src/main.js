@@ -48,7 +48,76 @@ function positionAtStreet(){
  yaw=heading;
 }
 
-function createBuilding(points,height){if(points.length<3)return;let outline=points.slice();if(outline[0].distanceTo(outline.at(-1))<0.1)outline.pop();if(outline.length<3)return;const shape=new THREE.Shape();shape.moveTo(outline[0].x,-outline[0].y);for(let i=1;i<outline.length;i++)shape.lineTo(outline[i].x,-outline[i].y);shape.closePath();const geom=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:1});geom.rotateX(-Math.PI/2);const mesh=new THREE.Mesh(geom,buildingMats[Math.floor(Math.random()*buildingMats.length)]);mesh.position.y=0.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x)),minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));buildings.push({minX,maxX,minZ,maxZ,outline})}
+
+const facadeBuckets=Array.from({length:5},()=>({positions:[],uvs:[],indices:[]}));
+const facadePalettes=[
+ {wall:'#aeb6b7',frame:'#d8e0df',glass:'#31536d',glassLit:'#7698ab'},
+ {wall:'#b4a69a',frame:'#dfd5ca',glass:'#314353',glassLit:'#8b9caa'},
+ {wall:'#8b9b9e',frame:'#c6d0d0',glass:'#27435c',glassLit:'#7194a1'},
+ {wall:'#d2c0a9',frame:'#eee2ce',glass:'#435766',glassLit:'#9eacaa'},
+ {wall:'#8e847c',frame:'#c4b9ad',glass:'#263d51',glassLit:'#788fa2'}
+];
+function facadeTexture(style){
+ const palette=facadePalettes[style];
+ const canvas=document.createElement('canvas');canvas.width=128;canvas.height=128;
+ const c=canvas.getContext('2d');c.fillStyle=palette.wall;c.fillRect(0,0,128,128);
+ // A single repeatable floor + window bay. Fully original procedural pattern.
+ c.fillStyle=palette.frame;c.fillRect(13,13,102,94);
+ c.fillStyle=palette.glass;c.fillRect(19,19,90,82);
+ c.fillStyle=palette.glassLit;c.globalAlpha=.45;c.fillRect(20,20,43,78);c.globalAlpha=1;
+ c.fillStyle='#e3f2f3';c.globalAlpha=.26;c.fillRect(21,21,12,76);c.globalAlpha=1;
+ c.fillStyle=palette.frame;c.fillRect(62,14,5,94);
+ c.fillStyle='#3f4b50';c.globalAlpha=.28;c.fillRect(0,112,128,5);c.globalAlpha=1;
+ const texture=new THREE.CanvasTexture(canvas);texture.wrapS=texture.wrapT=THREE.RepeatWrapping;
+ texture.colorSpace=THREE.SRGBColorSpace;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+ return texture;
+}
+const facadeMaterials=facadePalettes.map((_,i)=>new THREE.MeshStandardMaterial({
+ map:facadeTexture(i),roughness:.78,metalness:.08,side:THREE.DoubleSide
+}));
+function addWallToBatch(a,b,height,style,orientation){
+ const dx=b.x-a.x,dz=b.y-a.y,len=Math.hypot(dx,dz);
+ if(len<.6)return;
+ // Winding gives the outward normal, moving the finish slightly beyond
+ // the simple extruded collision shell to avoid z-fighting.
+ const sign=orientation>0?1:-1,ox=sign*dz/len*.09,oz=-sign*dx/len*.09;
+ const bucket=facadeBuckets[style],index=bucket.positions.length/3;
+ bucket.positions.push(a.x+ox,.12,a.y+oz,b.x+ox,.12,b.y+oz,b.x+ox,height+.12,b.y+oz,a.x+ox,height+.12,a.y+oz);
+ bucket.uvs.push(0,0,len/4,0,len/4,height/3.5,0,height/3.5);
+ bucket.indices.push(index,index+1,index+2,index,index+2,index+3);
+}
+function finalizeFacades(){
+ for(let i=0;i<facadeBuckets.length;i++){
+  const batch=facadeBuckets[i];if(!batch.indices.length)continue;
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(batch.positions,3));
+  geo.setAttribute('uv',new THREE.Float32BufferAttribute(batch.uvs,2));
+  geo.setIndex(batch.indices);geo.computeVertexNormals();
+  const mesh=new THREE.Mesh(geo,facadeMaterials[i]);
+  mesh.receiveShadow=true;scene.add(mesh);
+ }
+}
+function createBuilding(points,height){
+ if(points.length<3)return;
+ const outline=points.slice();
+ if(outline[0].distanceTo(outline.at(-1))<.1)outline.pop();
+ if(outline.length<3)return;
+ const style=Math.abs(Math.floor(outline[0].x*7+outline[0].y*11))%facadePalettes.length;
+ const shape=new THREE.Shape();shape.moveTo(outline[0].x,-outline[0].y);
+ for(let i=1;i<outline.length;i++)shape.lineTo(outline[i].x,-outline[i].y);
+ shape.closePath();
+ const geom=new THREE.ExtrudeGeometry(shape,{depth:height,bevelEnabled:false,curveSegments:1});
+ geom.rotateX(-Math.PI/2);
+ const mesh=new THREE.Mesh(geom,buildingMats[style]);
+ mesh.position.y=.12;mesh.receiveShadow=true;mesh.castShadow=height<90;scene.add(mesh);
+ let winding=0;
+ for(let i=0;i<outline.length;i++){const a=outline[i],b=outline[(i+1)%outline.length];winding+=a.x*b.y-b.x*a.y}
+ for(let i=0;i<outline.length;i++)addWallToBatch(outline[i],outline[(i+1)%outline.length],height,style,winding);
+ const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
+ const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
+ buildings.push({minX,maxX,minZ,maxZ,outline});
+}
+
 function fallback(){// Clearly synthetic fallback when live map service is unavailable.
  for(let x=-1050;x<=1050;x+=135){roads.push([new THREE.Vector2(x,-1200),new THREE.Vector2(x,1200)]);makeRibbon(roads.at(-1),17,roadMat)}for(let z=-1200;z<=1200;z+=130){roads.push([new THREE.Vector2(-1100,z),new THREE.Vector2(1100,z)]);makeRibbon(roads.at(-1),17,roadMat)}for(let x=-1050;x<1000;x+=135)for(let z=-1200;z<1100;z+=130){if(Math.abs(x)<160&&Math.abs(z)<170)continue;const h=14+Math.random()*70;createBuilding([new THREE.Vector2(x+24,z+24),new THREE.Vector2(x+98,z+24),new THREE.Vector2(x+98,z+88),new THREE.Vector2(x+24,z+88)],h)}status.innerHTML='Offline fallback: <b>synthetic blocks</b> (not real Perth). Reload to retry OpenStreetMap.';worldLoaded=true}
 async function loadOSM(){
@@ -62,7 +131,7 @@ async function loadOSM(){
  const endpoints=['https://overpass.private.coffee/api/interpreter','https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter'];let data;for(const endpoint of endpoints){try{status.textContent='Loading real Perth buildings and roads (trying '+new URL(endpoint).hostname+')…';const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),30000);const response=await fetch(endpoint,{method:'POST',body:'data='+encodeURIComponent(query),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:controller.signal});clearTimeout(timer);if(!response.ok)throw Error(response.status);data=await response.json();if(data.elements?.length)break}catch(e){console.warn('Map service:',e)}}if(!data?.elements?.length){status.innerHTML='Real Perth map unavailable. <b>No synthetic replacement loaded.</b> Please retry after the map snapshot workflow completes.';return}
  renderOSM(data)}
 function renderOSM(data){let roadCount=0,buildingCount=0;for(const item of data.elements){if(!item.geometry?.length)continue;const pts=item.geometry.map(g=>xy(g.lat,g.lon)),tags=item.tags||{};if(tags.highway){if(['footway','path','steps','pedestrian','cycleway','service'].includes(tags.highway))continue;let width=tags.highway==='motorway'?22:tags.highway==='primary'?18:tags.highway==='secondary'?15:tags.highway==='tertiary'?13:10;roads.push(pts);roadDecorations(pts,width,tags.highway);roadCount++}else if(tags.building){let h=parseFloat(tags.height)||parseFloat(tags['building:levels'])*3.2||12+Math.random()*13;h=Math.max(3,Math.min(h,240));createBuilding(pts,h);buildingCount++}else if(tags.natural==='water'||tags.landuse==='grass'){if(pts.length>=3){const s=new THREE.Shape();s.moveTo(pts[0].x,-pts[0].y);for(let i=1;i<pts.length;i++)s.lineTo(pts[i].x,-pts[i].y);const g=new THREE.ShapeGeometry(s);g.rotateX(-Math.PI/2);const m=new THREE.Mesh(g,tags.natural==='water'?waterMat:parkMat);m.position.y=0.15;scene.add(m)}}}
- positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>Real OSM geometry; heights approximate where not mapped.`;worldLoaded=true}
+ finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();status.innerHTML=`Perth CBD map: <b>${roadCount} roads</b> · <b>${buildingCount} buildings</b><br>Real OSM geometry; heights approximate where not mapped.`;worldLoaded=true}
 // Lightweight procedural street furniture, deliberately capped for desktop performance.
 function addStreetFurniture(){
  const poleGeometry=new THREE.CylinderGeometry(.075,.11,6.7,6);
