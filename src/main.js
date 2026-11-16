@@ -246,73 +246,71 @@ function buildRoof(outline,totalHeight,tags,style){
 const townHallGeo=xy(-31.955,115.860556);
 let townHallBuilt=false;
 function addTownHallDetail(outline){
- const west=Math.min(...outline.map(p=>p.x)),east=Math.max(...outline.map(p=>p.x));
- const north=Math.min(...outline.map(p=>p.y)),south=Math.max(...outline.map(p=>p.y));
- const x=west+Math.min(6,(east-west)*.23),z=north+Math.min(6,(south-north)*.23);
- const brick=new THREE.MeshStandardMaterial({color:0x914931,roughness:.95});
- const sandstone=new THREE.MeshStandardMaterial({color:0xe0ceb1,roughness:.85});
- const slate=new THREE.MeshStandardMaterial({color:0x454954,roughness:1});
- const dark=new THREE.MeshStandardMaterial({color:0x25303a,roughness:.7});
- const group=new THREE.Group();group.position.set(x,0,z);scene.add(group);
- const addBox=(w,h,d,cx,cy,cz,mat)=>{
-  const obj=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-  obj.position.set(cx,cy,cz);obj.castShadow=true;obj.receiveShadow=true;group.add(obj);return obj;
+ // The entire heritage building must be recognisable at street level; earlier
+ // implementation placed a tower INSIDE the brown building shell.
+ const xs=outline.map(p=>p.x),zs=outline.map(p=>p.y);
+ const west=Math.min(...xs),east=Math.max(...xs),north=Math.min(...zs),south=Math.max(...zs);
+ const width=east-west,depth=south-north;
+ const brick=new THREE.MeshStandardMaterial({color:0x934a35,roughness:.94});
+ const sandstone=new THREE.MeshStandardMaterial({color:0xe8d6b7,roughness:.86});
+ const slate=new THREE.MeshStandardMaterial({color:0x343b48,roughness:.83});
+ const dark=new THREE.MeshStandardMaterial({color:0x202c35,roughness:.3});
+ const group=new THREE.Group();scene.add(group);
+ const addBox=(w,h,d,x,y,z,mat)=>{
+  const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
+  mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;group.add(mesh);return mesh;
  };
- addBox(8.2,31,8.2,0,15.5,0,brick);
- for(const y of [4.2,12.5,20.5,28]){
-  addBox(8.9,.48,8.9,0,y,0,sandstone);
- }
- for(const side of [-1,1]){
-  // Tall arcade-like openings, repeated along the clock tower.
-  for(const y of [11,15,23]){
-   addBox(1.15,2.7,.09,side*2, y, -4.16,dark);
-   addBox(1.35,.26,.13,side*2,y+1.48,-4.22,sandstone);
-   addBox(.09,2.75,.15,side*2-.71,y,-4.22,sandstone);
-   addBox(.09,2.75,.15,side*2+.71,y,-4.22,sandstone);
+ // Tower is placed OUTSIDE the brown shell on the mapped footprint corner,
+ // where the whole structure is visible above the building roofline.
+ const size=Math.min(8.2,Math.max(5,Math.min(width,depth)*.33));
+ const tx=west+size*.5+1,tz=north+size*.5+1;
+ addBox(size,27,size,tx,13.5,tz,brick);
+ for(const y of [3.5,11,20,27,36])addBox(size+.45,.55,size+.45,tx,y,tz,sandstone);
+ addBox(size+1.2,8,size+1.2,tx,32,tz,brick);
+ for(const zFace of [tz-size/2-.08,tz+size/2+.08]){
+  for(const y of [8,14,21]){
+   for(const dx of [-size*.23,size*.23]){
+    addBox(size*.22,3.6,.13,tx+dx,y,zFace,dark);
+    addBox(size*.28,.27,.18,tx+dx,y+1.86,zFace,sandstone);
+   }
   }
  }
- // Clock faces: hand-drawn canvas texture, no external image licensing.
- const clockCanvas=document.createElement('canvas');clockCanvas.width=256;clockCanvas.height=256;
- const c=clockCanvas.getContext('2d');
- c.fillStyle='#e5d4ac';c.beginPath();c.arc(128,128,116,0,Math.PI*2);c.fill();
- c.strokeStyle='#303e43';c.lineWidth=12;c.stroke();
- c.strokeStyle='#334149';c.lineWidth=4;
- for(let i=0;i<12;i++){
-  const a=i*Math.PI/6-Math.PI/2;
-  c.beginPath();c.moveTo(128+Math.cos(a)*84,128+Math.sin(a)*84);c.lineTo(128+Math.cos(a)*99,128+Math.sin(a)*99);c.stroke();
+ // Explicit façade decoration on the street-facing mapped block
+ // (generic brown wall remains behind these).
+ const floors=2,facadeZ=north-.18;
+ for(let floor=0;floor<floors;floor++){
+  const y=4.5+floor*6;
+  for(let x=west+3;x<east-2;x+=4.5){
+   if(Math.abs(x-tx)<size*.7)continue;
+   addBox(2.15,3.5,.2,x,y,facadeZ,dark);
+   addBox(2.5,.3,.26,x,y+1.85,facadeZ,sandstone);
+   addBox(.2,3.8,.28,x-1.24,y,facadeZ,sandstone);
+   addBox(.2,3.8,.28,x+1.24,y,facadeZ,sandstone);
+  }
  }
- c.lineCap='round';c.lineWidth=7;c.beginPath();c.moveTo(128,128);c.lineTo(128,66);c.stroke();
- c.lineWidth=5;c.beginPath();c.moveTo(128,128);c.lineTo(181,143);c.stroke();
- c.fillStyle='#303e43';c.beginPath();c.arc(128,128,7,0,Math.PI*2);c.fill();
- const clockTexture=new THREE.CanvasTexture(clockCanvas);clockTexture.colorSpace=THREE.SRGBColorSpace;
- const clockMat=new THREE.MeshBasicMaterial({map:clockTexture,side:THREE.DoubleSide});
- const clockFace=new THREE.PlaneGeometry(4.9,4.9);
- for(const rotation of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
-  const m=new THREE.Mesh(clockFace,clockMat);m.rotation.y=rotation;
-  m.position.set(Math.sin(rotation)*4.15,33,Math.cos(rotation)*4.15);
-  group.add(m);
+ addBox(Math.max(3,width),.45,.6,(west+east)/2,9.1,north-.2,sandstone);
+ addBox(Math.max(3,width),.65,.7,(west+east)/2,16.3,north-.2,sandstone);
+ // Clock faces use a procedural original canvas asset.
+ const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+ const c=canvas.getContext('2d');c.fillStyle='#f1e5c9';c.beginPath();c.arc(128,128,114,0,Math.PI*2);c.fill();
+ c.strokeStyle='#27323b';c.lineWidth=10;c.stroke();
+ for(let i=0;i<12;i++){const a=i*Math.PI/6-Math.PI/2;c.beginPath();c.moveTo(128+Math.cos(a)*86,128+Math.sin(a)*86);c.lineTo(128+Math.cos(a)*104,128+Math.sin(a)*104);c.stroke()}
+ c.lineWidth=7;c.beginPath();c.moveTo(128,128);c.lineTo(128,62);c.moveTo(128,128);c.lineTo(170,148);c.stroke();
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+ const mat=new THREE.MeshBasicMaterial({map:texture,side:THREE.DoubleSide});
+ for(let i=0;i<4;i++){
+  const angle=i*Math.PI/2;
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(4.5,4.5),mat);
+  face.rotation.y=angle;face.position.set(tx+Math.sin(angle)*(size/2+.69),33.5,tz+Math.cos(angle)*(size/2+.69));group.add(face);
  }
- addBox(8.8,7.5,8.8,0,33,0,brick);
- // Clock faces intentionally in front of this brick volume.
- for(const rotation of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
-  const m=new THREE.Mesh(clockFace,clockMat);m.rotation.y=rotation;
-  m.position.set(Math.sin(rotation)*4.47,33,Math.cos(rotation)*4.47);group.add(m);
+ const roof=new THREE.Mesh(new THREE.ConeGeometry((size+1.2)*.75,11,4),slate);
+ roof.rotation.y=Math.PI/4;roof.position.set(tx,41.7,tz);roof.castShadow=true;group.add(roof);
+ for(const dx of [-size*.42,size*.42])for(const dz of [-size*.42,size*.42]){
+  const turret=new THREE.Mesh(new THREE.CylinderGeometry(.45,.55,4.5,8),brick);turret.position.set(tx+dx,39,tz+dz);group.add(turret);
+  const cap=new THREE.Mesh(new THREE.ConeGeometry(.9,3,8),slate);cap.position.set(tx+dx,42.8,tz+dz);group.add(cap);
  }
- const roof=new THREE.Mesh(new THREE.ConeGeometry(6.1,12.5,4),slate);
- roof.rotation.y=Math.PI/4;roof.position.y=43;roof.castShadow=true;group.add(roof);
- for(const dx of [-3.6,3.6])for(const dz of [-3.6,3.6]){
-  const turret=new THREE.Mesh(new THREE.CylinderGeometry(.65,.75,8,8),brick);
-  turret.position.set(dx,40,dz);group.add(turret);
-  const cap=new THREE.Mesh(new THREE.ConeGeometry(1.1,3.5,8),slate);
-  cap.position.set(dx,45.6,dz);group.add(cap);
- }
- const sign=document.createElement('div');
- sign.textContent='Perth Town Hall · stylised landmark model';
- sign.style.cssText='position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font:12px system-ui;color:#dce5eb;background:#122532a8;padding:5px 10px;border-radius:7px;pointer-events:none';
- document.body.append(sign);
  townHallBuilt=true;
 }
-
 function registerBuildingCollision(outline){
  const minX=Math.min(...outline.map(p=>p.x)),maxX=Math.max(...outline.map(p=>p.x));
  const minZ=Math.min(...outline.map(p=>p.y)),maxZ=Math.max(...outline.map(p=>p.y));
