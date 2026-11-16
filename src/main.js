@@ -34,7 +34,7 @@ function nearestStreet(originPoint){
   const t=THREE.MathUtils.clamp(new THREE.Vector2().subVectors(originPoint,a).dot(vec)/l2,0,1);
   const pt=new THREE.Vector2().copy(a).addScaledVector(vec,t);
   const d=pt.distanceToSquared(originPoint);
-  if(d<dist2&&!blocked(pt.x,pt.y)){dist2=d;found={position:pt,angle:Math.atan2(-vec.x,-vec.y)}}
+  const direction=Math.atan2(-vec.x,-vec.y);if(d<dist2&&!blocked(pt.x,pt.y,0,true,direction)){dist2=d;found={position:pt,angle:direction}}
  }
  return found;
 }
@@ -44,7 +44,7 @@ function positionAtStreet(){
  car.position.set(near.position.x,0,near.position.y);car.rotation.y=near.angle;
  heading=near.angle;
  const px=car.position.x+Math.cos(heading)*4.5,pz=car.position.z-Math.sin(heading)*4.5;
- player.position.set(blocked(px,pz)?car.position.x+2:px,0,blocked(px,pz)?car.position.z:pz);
+ player.position.set(blocked(px,pz)?car.position.x+6:px,0,blocked(px,pz)?car.position.z:pz);
  yaw=heading;
 }
 
