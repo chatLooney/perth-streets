@@ -99,6 +99,51 @@ function finalizeFacades(){
   mesh.receiveShadow=true;scene.add(mesh);
  }
 }
+// On-map landmark directory: only uses names/coordinates present in the OSM snapshot.
+const discoveredLandmarks=[];
+const landmarkPanel=document.createElement('section');
+landmarkPanel.style.cssText='position:absolute;top:125px;right:18px;background:#101c29e8;border:1px solid #9bc8e866;border-radius:10px;padding:12px;width:245px;color:#fff;font:13px system-ui;z-index:2';
+const landmarkTitle=document.createElement('div');landmarkTitle.textContent='PERTH BUILDING EXPLORER';landmarkTitle.style.cssText='font-weight:800;font-size:12px;letter-spacing:1px;margin-bottom:8px';
+const landmarkSelect=document.createElement('select');landmarkSelect.style.cssText='width:100%;padding:8px;background:#1b3040;color:#fff;border:1px solid #6e95ae;border-radius:5px';
+landmarkSelect.setAttribute('aria-label','Choose a named Perth building');
+const introOption=document.createElement('option');introOption.value='';introOption.textContent='Choose mapped landmark…';landmarkSelect.append(introOption);
+const landmarkButton=document.createElement('button');landmarkButton.textContent='VISIT BUILDING';landmarkButton.style.cssText='margin-top:8px;width:100%;padding:9px;font-size:12px;border-radius:5px;cursor:pointer';
+const landmarkStatus=document.createElement('div');landmarkStatus.style.cssText='margin-top:6px;color:#b2c8d8;font-size:11px';landmarkStatus.textContent='Only buildings named in OpenStreetMap';
+landmarkPanel.append(landmarkTitle,landmarkSelect,landmarkButton,landmarkStatus);document.body.append(landmarkPanel);
+function registerLandmark(tags,outline,height){
+ const name=(tags.name||'').trim();if(!name||name.length>70||discoveredLandmarks.some(b=>b.name===name))return;
+ const point=new THREE.Vector2();
+ for(const v of outline)point.add(v);
+ point.multiplyScalar(1/outline.length);
+ discoveredLandmarks.push({name,point,height,osmId:tags['ref']||null});
+}
+function setupLandmarkExplorer(){
+ const items=discoveredLandmarks.sort((a,b)=>a.name.localeCompare(b.name)).slice(0,120);
+ for(let index=0;index<items.length;index++){
+  const opt=document.createElement('option');opt.value=String(index);opt.textContent=items[index].name;landmarkSelect.append(opt);
+ }
+ landmarkStatus.textContent=items.length+' named mapped buildings · approximate 3D appearance';
+ landmarkButton.onclick=()=>{
+  const index=Number(landmarkSelect.value);
+  if(landmarkSelect.value===''||!items[index])return;
+  const target=items[index],candidate=nearestStreet(target.point);
+  if(!candidate){landmarkStatus.textContent='No nearby mapped road found';return}
+  // Stop the car and place the player safely in the neighbourhood, not inside a building.
+  driving=false;velocity=0;player.visible=true;
+  const p=candidate.position.clone();
+  const step=new THREE.Vector2(-Math.sin(candidate.angle),-Math.cos(candidate.angle));
+  let selected=null;
+  for(const side of [0,4,-4,7,-7,10,-10]){
+   const trial=p.clone().addScaledVector(new THREE.Vector2(-step.y,step.x),side);
+   if(!blocked(trial.x,trial.y,.8)){selected=trial;break}
+  }
+  if(!selected){landmarkStatus.textContent='Could not find safe walking location';return}
+  player.position.set(selected.x,0,selected.y);
+  car.position.set(p.x,0,p.y);car.rotation.y=candidate.angle;heading=candidate.angle;yaw=heading;
+  landmarkStatus.textContent='Viewing neighbourhood: '+target.name;
+ };
+}
+
 // Map-source building tags take precedence over the approximate visual style.
 const namedBuildingMarkers=[];
 function osmColor(raw){
@@ -209,7 +254,7 @@ function createBuilding(points,height,tags={},base=0,renderVisible=true,collisio
  roofEdgeVertices.push(a.x,wallHeight+.14,a.y,b.x,wallHeight+.14,b.y);
 }
 buildRoof(outline,height,tags,style);
- if(tags.name){const centroid=new THREE.Vector2(outline.reduce((v,p)=>v+p.x,0)/outline.length,outline.reduce((v,p)=>v+p.y,0)/outline.length);makeBuildingLabel(tags.name,centroid,height)}
+ if(tags.name){registerLandmark(tags,outline,height);const centroid=new THREE.Vector2(outline.reduce((v,p)=>v+p.x,0)/outline.length,outline.reduce((v,p)=>v+p.y,0)/outline.length);makeBuildingLabel(tags.name,centroid,height)}
  if(collision)registerBuildingCollision(outline);
 }
 
@@ -265,6 +310,7 @@ function renderOSM(data){
    parentsWithParts++;
    createBuilding(pts,height,tags,0,false,true);
    if(tags.name&&namedBuildingMarkers.length<26){
+    registerLandmark(tags,hull,height);
     const centroid=hull.reduce((v,q)=>v.add(q),new THREE.Vector2()).multiplyScalar(1/hull.length);
     makeBuildingLabel(tags.name,centroid,height);
    }
@@ -282,7 +328,7 @@ function renderOSM(data){
   createBuilding(pts,height,tags,min,true,min<1);
   sections++;
  }
- finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();
+ finalizeFacades();positionAtStreet();addStreetFurniture();createPedestrians();nextCheckpoint();setupLandmarkExplorer();
  status.innerHTML=`Perth CBD: <b>${roadCount} roads</b> · <b>${buildingCount} outlines</b> · <b>${sections} 3D sections</b><br>${parentsWithParts} buildings use detailed part geometry · ${verifiedHeightCount} tagged heights · ${roofStats.modelled} mapped roofs. Untagged architecture remains approximate.`;
  worldLoaded=true;
 }
