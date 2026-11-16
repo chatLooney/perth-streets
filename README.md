@@ -1,4 +1,4 @@
-# Perth Streets — original browser-game prototype v0.8
+# Perth Streets — original browser-game prototype v0.9
 
 A desktop-browser 3D exploration prototype based on real OpenStreetMap road and building geometry for Perth CBD and Northbridge. This is an original implementation, not Brisbane Streets source code.
 
@@ -17,6 +17,14 @@ To run locally, run `python -m http.server 8000` from the repository directory, 
 - Mouse wheel: zoom
 - R: reset
 - M: minimap
+
+## v0.9 — first distinctive heritage landmark
+
+- Original procedural **stylised** Perth Town Hall model at the OSM-mapped Town Hall footprint.
+- Red-brick facade, contrasting pale bands, dark roof, clock tower and small roof turrets inspired by published heritage descriptions.
+- The actual OSM footprint determines its placement. Building/tower elevations, widths and decoration are approximations, **not measured architectural geometry**.
+- Reference: City of Perth Town Hall hire guide and heritage record at https://www.perth.wa.gov.au/perthtownhall and https://inherit.dplh.wa.gov.au/public/inventory/details/210dee80-f68f-427a-ad20-d2028265b650
+- No third-party photo or 3D mesh is included. Clock art and geometry are generated in code.
 
 ## v0.8 — Perth building explorer
 
